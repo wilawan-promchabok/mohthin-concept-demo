@@ -1,0 +1,1645 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>หมอถิ่น MohThin - แพลตฟอร์มแผนที่และคลังความรู้หมอพื้นบ้านไทย</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet (OpenStreetMap) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Google Fonts: Sarabun & Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Sarabun', 'Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        herb: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            800: '#166534',
+                            900: '#14532d',
+                        },
+                        earth: {
+                            50: '#fdf8f6',
+                            100: '#fbe8e3',
+                            200: '#e5d6c2',
+                            600: '#dd6b20',
+                            700: '#c05621',
+                            800: '#9c4221',
+                        },
+                        gold: {
+                            400: '#fbbf24',
+                            500: '#f59e0b',
+                            600: '#d97706',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Sarabun', 'Inter', sans-serif; }
+        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        #healerMap { z-index: 0; }
+        .mt-pin { background: transparent; border: 0; }
+        .mt-pin-dot { width: 34px; height: 34px; border-radius: 9999px; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+        .mt-pin-dot.outstanding { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,.45), 0 2px 6px rgba(0,0,0,.35); }
+        #diseaseDetail, #diseaseResultsHeading, #recipeResultsHeading { scroll-margin-top: 6rem; }
+        #view-library :focus-visible { outline: 3px solid #15803d; outline-offset: 4px; }
+        .disease-comparison { width: 100%; border-collapse: collapse; font-size: .875rem; }
+        .disease-comparison th, .disease-comparison td { padding: 1rem; border: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
+        .disease-comparison td:nth-child(2) { background: #f0fdf4; }
+        .disease-comparison td:nth-child(3) { background: #eff6ff; }
+        .comparison-label { display: none; }
+        @media (max-width: 767px) {
+            .disease-comparison thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+            .disease-comparison, .disease-comparison tbody, .disease-comparison tr, .disease-comparison th, .disease-comparison td { display: block; width: 100%; }
+            .disease-comparison tr { margin-bottom: 1rem; }
+            .disease-comparison th { background: #f8fafc; }
+            .comparison-label { display: block; font-weight: 700; margin-bottom: .35rem; }
+        }
+    </style>
+</head>
+<body class="bg-herb-50/55 text-slate-800 antialiased min-h-screen flex flex-col">
+
+    <!-- Header / Navigation -->
+    <header class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-herb-100 shadow-sm">
+        <div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-4 xl:px-8 h-20 flex items-center justify-between gap-4 lg:gap-2 xl:gap-4">
+            <div class="flex items-center gap-3 lg:gap-2 xl:gap-3 cursor-pointer shrink-0" onclick="switchTab('home')">
+                <div class="w-12 h-12 lg:w-10 lg:h-10 xl:w-12 xl:h-12 rounded-2xl bg-gradient-to-br from-herb-600 to-herb-800 flex items-center justify-center text-white shadow-md shadow-herb-600/20">
+                    <i class="fa-solid fa-leaf text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg sm:text-xl lg:text-lg xl:text-xl text-herb-900 tracking-tight flex items-center gap-2 whitespace-nowrap">
+                        หมอถิ่น
+                        <span class="text-xs bg-herb-100 text-herb-800 px-2 py-0.5 rounded-full font-medium">IndiMed</span>
+                    </h1>
+                    <p class="hidden 2xl:block text-xs text-slate-500 whitespace-nowrap">แพลตฟอร์มแผนที่และคลังความรู้หมอพื้นบ้านไทย</p>
+                </div>
+            </div>
+
+            <!-- Desktop navigation: compact single row on small desktops -->
+            <nav class="hidden lg:flex items-center justify-center gap-0.5 xl:gap-1 shrink-0">
+                <button onclick="switchTab('home')" id="nav-home" class="nav-btn whitespace-nowrap px-1.5 xl:px-3 py-2 rounded-xl text-xs xl:text-sm font-semibold text-herb-800 bg-herb-100 transition-all">
+                    <i class="fa-solid fa-map-location-dot mr-1 xl:mr-1.5"></i>ข้อมูลหมอพื้นบ้าน
+                </button>
+                <button onclick="switchTab('excellence')" id="nav-excellence" class="nav-btn whitespace-nowrap px-1.5 xl:px-3 py-2 rounded-xl text-xs xl:text-sm font-medium text-earth-700 hover:text-earth-800 hover:bg-earth-50 transition-all">
+                    <i class="fa-solid fa-award text-gold-500 mr-1 xl:mr-1.5"></i>หมอไทยดีเด่น
+                </button>
+                <button onclick="switchTab('library')" id="nav-library" class="nav-btn whitespace-nowrap px-1.5 xl:px-3 py-2 rounded-xl text-xs xl:text-sm font-medium text-slate-600 hover:text-herb-800 hover:bg-herb-50 transition-all">
+                    <i class="fa-solid fa-book-open mr-1 xl:mr-1.5"></i>คลังตำรับยา
+                </button>
+                <button onclick="switchTab('research')" id="nav-research" class="nav-btn whitespace-nowrap px-1.5 xl:px-3 py-2 rounded-xl text-xs xl:text-sm font-medium text-slate-600 hover:text-herb-800 hover:bg-herb-50 transition-all">
+                    <i class="fa-solid fa-book-medical mr-1 xl:mr-1.5"></i>หลักฐานงานวิจัย
+                </button>
+                <button onclick="switchTab('community')" id="nav-community" class="nav-btn whitespace-nowrap px-1.5 xl:px-3 py-2 rounded-xl text-xs xl:text-sm font-medium text-slate-600 hover:text-herb-800 hover:bg-herb-50 transition-all">
+                    <i class="fa-solid fa-hospital-user mr-1 xl:mr-1.5"></i>เครือข่ายสุขภาพชุมชน
+                </button>
+            </nav>
+
+            <!-- Role Switcher -->
+            <div class="flex items-center gap-2 shrink-0">
+                <div class="relative">
+                    <button onclick="toggleRoleMenu()" class="flex items-center gap-2.5 lg:gap-1.5 xl:gap-2.5 whitespace-nowrap bg-white hover:bg-herb-50 border border-slate-200 hover:border-herb-200 pl-1.5 pr-3 py-1.5 rounded-full text-sm transition shadow-sm">
+                        <span class="w-8 h-8 rounded-full bg-herb-100 text-herb-700 flex items-center justify-center"><i id="current-role-icon" class="fa-solid fa-users text-sm"></i></span>
+                        <span class="leading-none text-left">
+                            <span class="block text-[10px] text-slate-400 font-medium">มุมมอง</span>
+                            <span id="current-role-label" class="block text-sm lg:text-xs xl:text-sm font-semibold text-slate-800 mt-0.5">ประชาชนทั่วไป</span>
+                        </span>
+                        <i class="fa-solid fa-chevron-down text-[10px] text-slate-400"></i>
+                    </button>
+                    <div id="role-menu" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50">
+                        <div class="px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">เลือกมุมมองผู้ใช้งาน</div>
+                        <button onclick="setRole('public')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-herb-50 hover:text-herb-800 flex items-center gap-3 whitespace-nowrap">
+                            <i class="fa-solid fa-users text-herb-600 w-5"></i> ประชาชนทั่วไป
+                            <i data-role-check="public" class="fa-solid fa-check ml-auto text-herb-600"></i>
+                        </button>
+                        <button onclick="setRole('staff')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-herb-50 hover:text-herb-800 flex items-center gap-3 whitespace-nowrap">
+                            <i class="fa-solid fa-user-doctor text-herb-600 w-5"></i> เจ้าหน้าที่ / นักวิจัย
+                            <i data-role-check="staff" class="fa-solid fa-check ml-auto text-herb-600 hidden"></i>
+                        </button>
+                        <button onclick="setRole('admin')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-herb-50 hover:text-herb-800 flex items-center gap-3 whitespace-nowrap">
+                            <i class="fa-solid fa-user-gear text-herb-600 w-5"></i> แอดมิน
+                            <i data-role-check="admin" class="fa-solid fa-check ml-auto text-herb-600 hidden"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Mobile Menu Toggle -->
+                <button onclick="toggleMobileMenu()" class="lg:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Navigation Menu -->
+        <div id="mobile-menu" class="hidden lg:hidden bg-white border-b border-herb-100 px-4 pt-2 pb-4 space-y-1">
+            <button onclick="switchTab('home'); toggleMobileMenu();" class="w-full text-left px-4 py-2 rounded-xl text-sm font-medium text-herb-800 bg-herb-50">
+                <i class="fa-solid fa-map-location-dot mr-2"></i>ข้อมูลหมอพื้นบ้าน
+            </button>
+            <button onclick="switchTab('excellence'); toggleMobileMenu();" class="w-full text-left px-4 py-2 rounded-xl text-sm font-medium text-earth-700 hover:bg-earth-50">
+                <i class="fa-solid fa-award text-gold-500 mr-2"></i>หมอไทยดีเด่น
+            </button>
+            <button onclick="switchTab('library'); toggleMobileMenu();" class="w-full text-left px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-herb-50">
+                <i class="fa-solid fa-book-open mr-2"></i>คลังตำรับยา
+            </button>
+            <button onclick="switchTab('research'); toggleMobileMenu();" class="w-full text-left px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-herb-50">
+                <i class="fa-solid fa-book-medical mr-2"></i>งานวิจัย
+            </button>
+            <button onclick="switchTab('community'); toggleMobileMenu();" class="w-full text-left px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-herb-50">
+                <i class="fa-solid fa-hospital-user mr-2"></i>เครือข่ายสุขภาพชุมชน
+            </button>
+
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+
+        <!-- ==================== TAB 1: HOME & MAP & PROFILES ==================== -->
+        <div id="view-home" class="space-y-8 animate-fadeIn">
+            
+            <!-- Hero Banner & Search Bar -->
+            <div class="relative rounded-3xl bg-gradient-to-r from-herb-800 via-herb-700 to-emerald-900 text-white p-6 sm:p-10 overflow-hidden shadow-xl">
+                <div class="absolute -right-10 -bottom-10 opacity-10 pointer-events-none">
+                    <i class="fa-solid fa-seedling text-9xl"></i>
+                </div>
+                <div class="relative z-10 max-w-2xl space-y-4">
+                    <h2 class="text-2xl sm:text-4xl font-bold tracking-tight">สืบสานภูมิปัญญา ค้นหาหมอพื้นบ้านใกล้คุณ</h2>
+                    <p class="text-herb-100 text-sm sm:text-base leading-relaxed">
+                        แพลตฟอร์มตรวจสอบหมอพื้นบ้านที่ได้รับการรับรอง พร้อมเชื่อมโยงตำรับยาสมุนไพรและหลักฐานงานวิจัยทางวิทยาศาสตร์
+                    </p>
+
+                    <!-- Search & Filter Bar -->
+                    <div class="bg-white p-3 rounded-2xl shadow-lg flex flex-col md:flex-row gap-3 text-slate-800">
+                        <div class="flex-1 flex items-center px-3 bg-slate-50 rounded-xl border border-slate-200">
+                            <i class="fa-solid fa-magnifying-glass text-slate-400 mr-3"></i>
+                            <input type="text" id="searchInput" oninput="filterHealers()" placeholder="ค้นหาชื่อหมอ, ตำรับยา, อาการ หรือสมุนไพร..." class="w-full py-2.5 bg-transparent text-sm focus:outline-none">
+                        </div>
+                        <div class="w-full md:w-48">
+                            <select id="provinceFilter" onchange="filterHealers()" class="w-full p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-sm focus:outline-none">
+                                <option value="">ทุกจังหวัด / พื้นที่</option>
+                                <option value="เชียงใหม่">เชียงใหม่</option>
+                                <option value="อุบลราชธานี">อุบลราชธานี</option>
+                                <option value="นครราชสีมา">นครราชสีมา</option>
+                                <option value="สุราษฎร์ธานี">สุราษฎร์ธานี</option>
+                                <option value="พระนครศรีอยุธยา">พระนครศรีอยุธยา</option>
+                            </select>
+                        </div>
+                        <button onclick="filterHealers()" class="bg-herb-600 hover:bg-herb-700 text-white px-6 py-2.5 rounded-xl font-semibold text-sm transition shadow-md shadow-herb-600/30 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-filter"></i> ค้นหา
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category Filter Pills -->
+            <div class="space-y-3">
+                <h3 class="text-sm font-semibold text-slate-600 uppercase tracking-wider">กรองตาม 6 ประเภทหมอพื้นบ้าน</h3>
+                <div class="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
+                    <button onclick="setCategory('all')" id="cat-all" class="category-btn active-cat whitespace-nowrap px-4 py-2 rounded-2xl text-xs sm:text-sm font-medium bg-herb-800 text-white shadow-sm transition">
+                        <i class="fa-solid fa-border-all mr-1.5"></i> ทั้งหมด (6 ประเภท)
+                    </button>
+                    <button onclick="setCategory('หมอยาสมุนไพร')" id="cat-หมอยาสมุนไพร" class="category-btn whitespace-nowrap px-4 py-2 rounded-2xl text-xs sm:text-sm font-medium bg-white text-slate-700 hover:bg-herb-50 border border-slate-200 transition">
+                        <i class="fa-solid fa-mortar-pestle text-herb-600 mr-1.5"></i> หมอยาสมุนไพร
+                    </button>
+                    <button onclick="setCategory('หมอรักษาสัตว์พิษกัด')" id="cat-หมอรักษาสัตว์พิษกัด" class="category-btn whitespace-nowrap px-4 py-2 rounded-2xl text-xs sm:text-sm font-medium bg-white text-slate-700 hover:bg-herb-50 border border-slate-200 transition">
+                        <i class="fa-solid fa-shield-cat text-herb-600 mr-1.5"></i> หมอรักษาสัตว์พิษกัด
+                    </button>
+                    <button onclick="setCategory('หมอตำแย')" id="cat-หมอตำแย" class="category-btn whitespace-nowrap px-4 py-2 rounded-2xl text-xs sm:text-sm font-medium bg-white text-slate-700 hover:bg-herb-50 border border-slate-200 transition">
+                        <i class="fa-solid fa-child-reaching text-herb-600 mr-1.5"></i> หมอตำแย
+                    </button>
+                    <button onclick="setCategory('หมอนวดพื้นบ้าน')" id="cat-หมอนวดพื้นบ้าน" class="category-btn whitespace-nowrap px-4 py-2 rounded-2xl text-xs sm:text-sm font-medium bg-white text-slate-700 hover:bg-herb-50 border border-slate-200 transition">
+                        <i class="fa-solid fa-hands-bubbles text-herb-600 mr-1.5"></i> หมอนวดพื้นบ้าน
+                    </button>
+                    <button onclick="setCategory('หมอพิธีกรรม')" id="cat-หมอพิธีกรรม" class="category-btn whitespace-nowrap px-4 py-2 rounded-2xl text-xs sm:text-sm font-medium bg-white text-slate-700 hover:bg-herb-50 border border-slate-200 transition">
+                        <i class="fa-solid fa-fire text-herb-600 mr-1.5"></i> หมอพิธีกรรม
+                    </button>
+                    <button onclick="setCategory('หมอกระดูก')" id="cat-หมอกระดูก" class="category-btn whitespace-nowrap px-4 py-2 rounded-2xl text-xs sm:text-sm font-medium bg-white text-slate-700 hover:bg-herb-50 border border-slate-200 transition">
+                        <i class="fa-solid fa-bone text-herb-600 mr-1.5"></i> หมอกระดูก
+                    </button>
+                </div>
+            </div>
+
+            <!-- Interactive Map & Healer List Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                
+                <!-- Simulated Map Area (Left Column: 5 cols) -->
+                <div class="lg:col-span-5 bg-white p-5 rounded-3xl shadow-sm border border-herb-100 flex flex-col space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-map text-herb-600"></i> แผนที่แสดงพิกัด (ระดับตำบล/อำเภอ)
+                        </h3>
+                        <span class="text-xs bg-emerald-50 text-herb-700 px-2.5 py-1 rounded-full font-medium">คุ้มครองข้อมูลส่วนบุคคล</span>
+                    </div>
+
+                    <!-- Leaflet Map -->
+                    <div class="relative w-full h-80 sm:h-96 rounded-2xl border border-herb-200 overflow-hidden shadow-inner bg-emerald-50">
+                        <div id="healerMap" class="w-full h-full"></div>
+                        <div id="mapFallback" class="hidden absolute inset-0 flex items-center justify-center text-center text-xs text-slate-500 p-6">
+                            โหลดแผนที่ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วเปิดไฟล์ใหม่ (รายชื่อหมอพื้นบ้านด้านข้างยังใช้งานได้)
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-slate-400 -mt-2">คลิกหมุดเพื่อดูข้อมูลหมอพื้นบ้านรายพื้นที่ • ตำแหน่งในต้นแบบเป็นข้อมูลสาธิตระดับอำเภอ/จังหวัด</p>
+
+                    <div class="text-xs text-slate-500 bg-slate-50 p-3 rounded-xl flex items-start gap-2">
+                        <i class="fa-solid fa-circle-info text-herb-600 mt-0.5"></i>
+                        <span>พิกัดบนแผนที่แสดงในระดับตำบล/อำเภอ เพื่อความปลอดภัยและรักษาสิทธิ์ตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล (PDPA)</span>
+                    </div>
+                </div>
+
+                <!-- Healer List (Right Column: 7 cols) -->
+                <div class="lg:col-span-7 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-user-doctor text-herb-600"></i> รายชื่อหมอพื้นบ้านที่ได้รับการรับรอง 
+                            <span id="healerCount" class="text-xs bg-herb-100 text-herb-800 px-2.5 py-0.5 rounded-full">3 ท่าน</span>
+                        </h3>
+                        <span class="text-xs text-slate-400">อัปเดตข้อมูลล่าสุด 2026</span>
+                    </div>
+
+                    <!-- Healers Container -->
+                    <div id="healersListContainer" class="space-y-4">
+                        <!-- Dynamically rendered via JS -->
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ==================== TAB: FOLK PRESCRIPTION LIBRARY ==================== -->
+        <div id="view-library" class="hidden space-y-8 animate-fadeIn">
+            <section aria-labelledby="diseaseSearchHeading" class="space-y-5">
+                <div class="bg-white border border-herb-100 p-5 sm:p-6 rounded-3xl shadow-sm">
+                    <h2 id="diseaseSearchHeading" class="text-2xl font-bold text-herb-900">คลังตำรับยาและความรู้โรค</h2>
+                    <form id="librarySearchForm" onsubmit="submitLibrarySearch(event)" class="flex flex-col md:flex-row md:items-end gap-3 mt-5">
+                        <div class="flex-1 min-w-0">
+                            <label for="librarySearchInput" class="sr-only">ค้นหาโรค ตำรับยา หรือสมุนไพร</label>
+                            <input id="librarySearchInput" type="search" oninput="updateLibraryDraft()" placeholder="ค้นหาโรค ตำรับยา หรือสมุนไพร" class="w-full min-w-0 bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-3 text-sm">
+                        </div>
+                        <div class="md:w-48 shrink-0">
+                            <label for="libRegion" class="sr-only">ภูมิภาคของตำรับยา</label>
+                            <select id="libRegion" onchange="changeLibraryRegion()" aria-describedby="libraryRegionHelp" class="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-3 text-sm">
+                                <option value="">ทุกภูมิภาค</option>
+                                <option value="อีสาน">ภาคอีสาน</option>
+                                <option value="เหนือ">ภาคเหนือ</option>
+                                <option value="กลาง">ภาคกลาง</option>
+                                <option value="ใต้">ภาคใต้</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="shrink-0 bg-herb-700 hover:bg-herb-800 text-white px-6 py-3 rounded-xl text-sm font-semibold">ค้นหา</button>
+                    </form>
+                    <div class="flex flex-wrap items-start justify-between gap-3 mt-3 text-xs text-slate-500">
+                        <p id="libraryRegionHelp">ภูมิภาคใช้กับตำรับยาเท่านั้น</p>
+                        <div class="flex items-start gap-4">
+                            <details id="librarySearchHelp">
+                                <summary class="cursor-pointer text-herb-700">วิธีค้นหา</summary>
+                                <p class="mt-2 max-w-sm leading-relaxed">เช่น อัมพาต ไพล หรือ ยาสหัศธารา หากพิมพ์หลายคำ ต้องพบครบทุกคำในรายการเดียวกัน ค้นจากข้อมูลที่มี ไม่ใช่ระบบวินิจฉัยหรือแนะนำยา</p>
+                            </details>
+                            <button id="libraryClearButton" type="button" onclick="clearLibrarySearch()" class="hidden shrink-0 text-herb-700 hover:underline" aria-label="ล้างคำค้นและภูมิภาค">ล้าง</button>
+                        </div>
+                    </div>
+                    <p id="libraryDraftHint" class="hidden mt-3 text-sm text-amber-800">คำค้นเปลี่ยนแล้ว กดค้นหาเพื่ออัปเดต</p>
+                </div>
+            </section>
+
+            <section id="libraryInitial" aria-labelledby="libraryRecommendedHeading" class="bg-white border border-slate-200 rounded-3xl p-4 sm:p-6 lg:p-8 shadow-sm space-y-4">
+                <h2 id="libraryRecommendedHeading" class="text-xl font-bold">ตำรับยาแนะนำ</h2>
+                <p class="text-sm text-slate-500">แนะนำสำหรับสำรวจข้อมูลจากทุกภูมิภาค ไม่ใช่คำแนะนำให้ใช้ยารักษาโรค</p>
+                <div id="libraryRecommendedGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+            </section>
+            <section id="libraryResults" aria-labelledby="libraryResultsHeading" class="hidden bg-white border border-slate-200 rounded-3xl p-4 sm:p-6 lg:p-8 shadow-sm space-y-6">
+                <h2 id="libraryResultsHeading" class="text-2xl font-bold">ผลการค้นหา</h2>
+                <p id="librarySearchStatus" role="status" aria-live="polite" aria-atomic="true" class="text-sm text-slate-600"></p>
+                <p id="libraryAllEmpty" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-900">ไม่พบผลลัพธ์</p>
+                <section aria-labelledby="diseaseResultsHeading" class="space-y-4">
+                <h3 id="diseaseResultsHeading" tabindex="-1" class="text-xl font-bold">ความรู้โรค <span id="diseaseResultCount" class="text-sm font-medium text-slate-500"></span></h3>
+                <div id="diseaseGrid" class="space-y-4">
+                <div id="strokeDiseaseCard" class="disease-card hidden bg-herb-50/50 border border-herb-200 rounded-2xl p-4 sm:p-6">
+                    <div class="flex items-start gap-4">
+                        <span class="w-12 h-12 shrink-0 rounded-2xl bg-herb-100 text-herb-700 flex items-center justify-center" aria-hidden="true"><i class="fa-solid fa-brain text-xl"></i></span>
+                        <div>
+                            <span class="text-xs font-semibold text-herb-700">ความรู้โรคและการฟื้นฟู</span>
+                            <h4 class="text-xl font-bold mt-1">อัมพฤกษ์–อัมพาต</h4>
+                            <p class="text-sm text-slate-600 mt-2 leading-relaxed">ภาวะกล้ามเนื้ออ่อนแรงหรือเคลื่อนไหวไม่ได้ โดยโรคหลอดเลือดสมองเป็นสาเหตุสำคัญหนึ่ง เรียนรู้สัญญาณเตือน การรักษาหลัก และการดูแลเสริมอย่างปลอดภัย</p>
+                        </div>
+                        </div>
+                        <nav id="diseasePagination" aria-label="หน้าผลความรู้โรค" class="hidden flex flex-wrap items-center justify-between gap-3 text-sm">
+                            <p id="diseasePageRange"></p>
+                            <div class="flex gap-2">
+                                <button type="button" data-page-step="-1" onclick="changeLibraryPage('disease', -1)" aria-label="หน้าก่อนหน้าของความรู้โรค" class="border border-slate-200 rounded-xl px-3 py-2 disabled:opacity-40 disabled:cursor-not-allowed">ก่อนหน้า</button>
+                                <button type="button" data-page-step="1" onclick="changeLibraryPage('disease', 1)" aria-label="หน้าถัดไปของความรู้โรค" class="border border-slate-200 rounded-xl px-3 py-2 disabled:opacity-40 disabled:cursor-not-allowed">ถัดไป</button>
+                            </div>
+                        </nav>
+                    </div>
+                    <div class="flex flex-wrap gap-2 mt-4 text-xs">
+                        <span class="rounded-full bg-herb-50 text-herb-800 px-3 py-1.5">แพทย์พื้นบ้าน: การดูแลเสริม</span>
+                        <span class="rounded-full bg-blue-50 text-blue-800 px-3 py-1.5">แพทย์แผนปัจจุบัน: การรักษาหลัก</span>
+                        <span class="rounded-full bg-amber-50 text-amber-800 px-3 py-1.5">ร่างเนื้อหา • รอตรวจทาน</span>
+                    </div>
+                    <p id="diseaseMatchReason" class="hidden mt-4 text-sm text-herb-800"></p>
+                    <button id="openStrokeDetail" type="button" onclick="openDiseaseDetail()" aria-expanded="false" aria-controls="diseaseDetail" class="mt-5 bg-herb-700 hover:bg-herb-800 text-white rounded-xl px-5 py-3 text-sm font-semibold">อ่านข้อมูลและเปรียบเทียบแนวทางดูแล <i class="fa-solid fa-arrow-down ml-1" aria-hidden="true"></i></button>
+                </div>
+                <p id="diseaseEmpty" class="hidden bg-white rounded-2xl border border-slate-200 p-6 text-center text-sm text-slate-500">ไม่พบความรู้โรคที่ตรงกับคำค้นในข้อมูลที่มี</p>
+                </section>
+
+                <section aria-labelledby="recipeResultsHeading" class="border-t border-slate-200 pt-6 space-y-4">
+                    <div class="space-y-3">
+                        <h3 id="recipeResultsHeading" tabindex="-1" class="text-xl font-bold text-slate-800 flex flex-wrap items-center gap-2">
+                            <i class="fa-solid fa-book-open text-herb-700" aria-hidden="true"></i> ตำรับยา <span id="recipeResultCount" class="text-sm font-medium text-slate-500"></span>
+                        </h3>
+                        <p class="text-slate-500 text-sm">ผลจากช่องค้นหาและตัวกรองภูมิภาคด้านบน พร้อมสิทธิและแหล่งที่มาของตำรับยา</p>
+                        <p class="text-xs text-amber-800 bg-amber-50 rounded-xl p-3">ไม่พบผลลัพธ์</p>
+                    </div>
+                    <div id="libraryGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="lib-card bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-herb-300 transition" data-region="อีสาน" data-herbs="ไพล สารภี ว่านนางคำ น้ำมันมะพร้าว" data-symptoms="แก้ปวดเมื่อยกล้ามเนื้อ ข้ออักเสบ เคล็ดขัดยอก">
+                            <div class="p-4 sm:p-5">
+                                <div class="flex flex-wrap justify-between items-start gap-2 mb-2">
+                                    <span class="bg-herb-50 text-herb-700 text-[11px] font-bold px-2.5 py-1 rounded-md border border-herb-100">ภูมิภาค: อีสาน</span>
+                                    <span class="text-[11px] text-slate-400 flex items-center gap-1"><i class="fa-solid fa-lock"></i> ลิขสิทธิ์ชุมชน</span>
+                                </div>
+                                <h4 class="text-lg font-bold text-slate-800">ตำรับยาน้ำมันไพลสดกลั่น</h4>
+                                <p class="text-xs font-semibold text-herb-700 mt-0.5">สรรพคุณ: แก้ปวดเมื่อยกล้ามเนื้อ ข้ออักเสบ เคล็ดขัดยอก</p>
+                                <p class="text-xs text-slate-500 mt-2">องค์ประกอบหลักประกอบด้วย ไพล สารภี ว่านนางคำ และน้ำมันมะพร้าวสกัดเย็น ผ่านการเคี่ยวตามกรรมวิธีโบราณ...</p>
+                                <p class="library-match hidden text-xs text-herb-800 mt-3"></p>
+                                <div class="mt-4 pt-3 border-t border-slate-100 flex flex-wrap gap-3 items-center justify-between text-xs">
+                                    <span class="text-slate-500">โดย: <strong>พ่อหมอทองดี สุวรรณประสิทธิ์</strong></span>
+                                    <button onclick="switchTab('research')" class="text-herb-700 font-semibold hover:underline flex items-center gap-1">
+                                        ตรวจสอบงานวิจัย <i class="fa-solid fa-arrow-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="lib-card bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-herb-300 transition" data-region="เหนือ" data-herbs="เถาวัลย์เปรียง เถาเอ็นอ่อน เถาเอนอ่อน แสลงใจ" data-symptoms="คลายเส้น แก้ลมจับเส้น ตึงของเส้นเอ็น">
+                            <div class="p-4 sm:p-5">
+                                <div class="flex flex-wrap justify-between items-start gap-2 mb-2">
+                                    <span class="bg-earth-50 text-earth-800 text-[11px] font-bold px-2.5 py-1 rounded-md border border-earth-200">ภูมิภาค: เหนือ</span>
+                                    <span class="text-[11px] text-slate-400 flex items-center gap-1"><i class="fa-solid fa-lock"></i> อนุญาตเผยแพร่</span>
+                                </div>
+                                <h4 class="text-lg font-bold text-slate-800">ตำรับยาต้มแก้กษัยเส้นป้านคำ</h4>
+                                <p class="text-xs font-semibold text-herb-700 mt-0.5">สรรพคุณ: คลายเส้น แก้ลมจับเส้น เถาเอนอ่อน</p>
+                                <p class="text-xs text-slate-500 mt-2">ใช้เถาวัลย์เปรียง เถาเอ็นอ่อน และแสลงใจ ต้มตามสัดส่วน ควบคุมความร้อนระดับกลาง บรรเทาอาการตึงของเส้นเอ็น...</p>
+                                <p class="library-match hidden text-xs text-herb-800 mt-3"></p>
+                                <div class="mt-4 pt-3 border-t border-slate-100 flex flex-wrap gap-3 items-center justify-between text-xs">
+                                    <span class="text-slate-500">โดย: <strong>แม่ครูคำ ยอดปัญญา</strong></span>
+                                    <button onclick="switchTab('research')" class="text-herb-700 font-semibold hover:underline flex items-center gap-1">
+                                        ตรวจสอบงานวิจัย <i class="fa-solid fa-arrow-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="lib-card bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-herb-300 transition" data-region="ใต้" data-herbs="ใบย่านาง เสลดพังพอนตัวเมีย ดินสอพอง" data-symptoms="ถอนพิษไข้ ถอนพิษแมลงสัตว์กัดต่อย อักเสบ ผื่นแพ้">
+                            <div class="p-4 sm:p-5">
+                                <div class="flex flex-wrap justify-between items-start gap-2 mb-2">
+                                    <span class="bg-blue-50 text-blue-700 text-[11px] font-bold px-2.5 py-1 rounded-md border border-blue-200">ภูมิภาค: ใต้</span>
+                                    <span class="text-[11px] text-slate-400 flex items-center gap-1"><i class="fa-solid fa-lock"></i> อนุญาตเผยแพร่</span>
+                                </div>
+                                <h4 class="text-lg font-bold text-slate-800">ตำรับยาพอกสมุนไพรดับพิษร้อน</h4>
+                                <p class="text-xs font-semibold text-herb-700 mt-0.5">สรรพคุณ: ถอนพิษไข้ ถอนพิษแมลงสัตว์กัดต่อย</p>
+                                <p class="text-xs text-slate-500 mt-2">ใช้ใบย่านาง เสลดพังพอนตัวเมีย และดินสอพอง บดละเอียดพอกบริเวณที่อักเสบหรือมีอาการผื่นแพ้...</p>
+                                <p class="library-match hidden text-xs text-herb-800 mt-3"></p>
+                                <div class="mt-4 pt-3 border-t border-slate-100 flex flex-wrap gap-3 items-center justify-between text-xs">
+                                    <span class="text-slate-500">โดย: <strong>หมอบุญส่ง ศรีใต้</strong></span>
+                                    <button onclick="switchTab('research')" class="text-herb-700 font-semibold hover:underline flex items-center gap-1">
+                                        ตรวจสอบงานวิจัย <i class="fa-solid fa-arrow-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <nav id="recipePagination" aria-label="หน้าผลตำรับยา" class="hidden flex flex-wrap items-center justify-between gap-3 text-sm">
+                        <p id="recipePageRange"></p>
+                        <div class="flex gap-2">
+                            <button type="button" data-page-step="-1" onclick="changeLibraryPage('recipe', -1)" aria-label="หน้าก่อนหน้าของตำรับยา" class="border border-slate-200 rounded-xl px-3 py-2 disabled:opacity-40 disabled:cursor-not-allowed">ก่อนหน้า</button>
+                            <button type="button" data-page-step="1" onclick="changeLibraryPage('recipe', 1)" aria-label="หน้าถัดไปของตำรับยา" class="border border-slate-200 rounded-xl px-3 py-2 disabled:opacity-40 disabled:cursor-not-allowed">ถัดไป</button>
+                        </div>
+                    </nav>
+                    <p id="libraryEmpty" class="hidden text-center text-sm text-slate-500 py-8">ไม่พบตำรับยาที่ตรงกับเงื่อนไขการค้นหา</p>
+                </section>
+            </section>
+
+            <article id="diseaseDetail" aria-labelledby="diseaseDetailHeading" class="hidden bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 space-y-8">
+                <div>
+                    <button type="button" onclick="closeDiseaseDetail()" class="text-sm font-semibold text-herb-700 hover:underline"><i class="fa-solid fa-arrow-left mr-1" aria-hidden="true"></i> กลับไปผลการค้นหา</button>
+                    <h2 id="diseaseDetailHeading" tabindex="-1" class="text-2xl sm:text-3xl font-bold mt-4">อัมพฤกษ์–อัมพาต: รู้จักโรคและเปรียบเทียบแนวทางดูแล</h2>
+                    <p class="text-sm text-slate-500 mt-2">เรียบเรียงจาก “ร่าง อัมพาต.docx” • ข้อมูลเพื่อการเรียนรู้ • รอตรวจทานโดยผู้เชี่ยวชาญก่อนเผยแพร่จริง</p>
+                </div>
+
+                <aside aria-labelledby="strokeEmergencyHeading" class="bg-red-50 border border-red-200 rounded-2xl p-5">
+                    <h3 id="strokeEmergencyHeading" class="text-lg font-bold text-red-800"><i class="fa-solid fa-triangle-exclamation mr-1" aria-hidden="true"></i> อาการฉับพลัน ต้องไปโรงพยาบาลทันที</h3>
+                    <p class="text-sm text-red-900 leading-relaxed mt-2">ปากเบี้ยว แขนขาอ่อนแรง พูดไม่ชัด เดินเซ หรือมองเห็นผิดปกติที่เกิดขึ้นฉับพลัน อาจเป็นโรคหลอดเลือดสมอง แม้อาการหายไปเองก็ไม่ควรรอ</p>
+                    <p class="text-sm font-semibold text-red-900 mt-2">การนวดและสมุนไพรไม่สามารถทดแทนการรักษาฉุกเฉินได้</p>
+                    <a href="tel:1669" class="inline-flex items-center gap-2 mt-4 rounded-xl bg-red-700 hover:bg-red-800 text-white px-4 py-2.5 font-bold text-sm"><i class="fa-solid fa-phone" aria-hidden="true"></i> โทร 1669 — การแพทย์ฉุกเฉิน</a>
+                </aside>
+
+                <section aria-labelledby="strokeOverviewHeading" class="space-y-4">
+                    <h3 id="strokeOverviewHeading" class="text-xl font-bold">อัมพฤกษ์และอัมพาตคืออะไร?</h3>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div class="bg-slate-50 border border-slate-200 p-4 rounded-2xl"><h4 class="font-bold">อัมพฤกษ์</h4><p class="text-sm text-slate-600 mt-2">ภาวะกล้ามเนื้ออ่อนแรง แต่ยังเคลื่อนไหวได้บางส่วน</p></div>
+                        <div class="bg-slate-50 border border-slate-200 p-4 rounded-2xl"><h4 class="font-bold">อัมพาต</h4><p class="text-sm text-slate-600 mt-2">ภาวะที่ไม่สามารถเคลื่อนไหวกล้ามเนื้อบางส่วนหรือทั้งหมดได้</p></div>
+                    </div>
+                    <p class="text-sm text-slate-600 leading-relaxed">โรคหลอดเลือดสมอง (Stroke) เป็นสาเหตุสำคัญประการหนึ่ง เมื่อสมองส่วนควบคุมการเคลื่อนไหวเสียหายอาจเกิดอัมพฤกษ์หรืออัมพาตได้ แต่ไม่ได้หมายความว่าอัมพาตทุกกรณีเกิดจากโรคหลอดเลือดสมอง ต้องให้แพทย์ประเมินสาเหตุ</p>
+                </section>
+
+                <section aria-labelledby="strokeCauseHeading" class="space-y-4">
+                    <h3 id="strokeCauseHeading" class="text-xl font-bold">สาเหตุและมุมมองต่อโรค</h3>
+                    <div class="grid md:grid-cols-2 gap-4 text-sm leading-relaxed">
+                        <div class="bg-herb-50 border border-herb-200 p-5 rounded-2xl">
+                            <h4 class="font-bold text-herb-800">การแพทย์พื้นบ้าน</h4>
+                            <p class="mt-2">องค์ความรู้แตกต่างกันตามท้องถิ่น บางกลุ่มอธิบายด้วยความไม่สมดุลของธาตุทั้งสี่ เลือดลม หรือเส้น และสืบทอดกรรมวิธีจากครูบาอาจารย์</p>
+                            <p class="mt-3 text-herb-900">นี่คือกรอบอธิบายตามภูมิปัญญา ไม่ใช่ข้อสรุปทางชีวการแพทย์ และไม่ใช้แทนการตรวจวินิจฉัย</p>
+                        </div>
+                        <div class="bg-blue-50 border border-blue-200 p-5 rounded-2xl">
+                            <h4 class="font-bold text-blue-800">การแพทย์แผนปัจจุบัน</h4>
+                            <ul class="list-disc pl-5 mt-2 space-y-2">
+                                <li><strong>หลอดเลือดสมองตีบหรืออุดตัน:</strong> ลิ่มเลือดอุดกั้น ทำให้สมองขาดเลือดและออกซิเจน</li>
+                                <li><strong>หลอดเลือดสมองแตก:</strong> เกิดเลือดออกและเนื้อสมองเสียหาย</li>
+                            </ul>
+                            <p class="mt-3">สองภาวะนี้รักษาต่างกัน ต้องตรวจ CT หรือ MRI ในโรงพยาบาลโดยเร็ว</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-slate-600 bg-slate-50 rounded-xl p-4"><strong>แยกจากแพทย์พื้นบ้าน:</strong> การแพทย์แผนไทยอธิบายตามทฤษฎีวาโยธาตุ (ธาตุลม) โดยเฉพาะลมอุทธังคมาวาตาและลมอโธคมาวาตา ไม่ควรเหมารวมว่าหมอพื้นบ้านทุกท้องถิ่นใช้ทฤษฎีเดียวกัน</p>
+                </section>
+
+                <section aria-labelledby="strokeComparisonHeading">
+                    <h3 id="strokeComparisonHeading" class="text-xl font-bold mb-4">เปรียบเทียบแพทย์พื้นบ้านกับแพทย์แผนปัจจุบัน</h3>
+                    <table class="disease-comparison" role="table">
+                        <caption class="text-sm text-slate-500 text-left mb-3">บทบาทต่างกัน ไม่ใช่ทางเลือกที่ใช้แทนกัน โดยเฉพาะในระยะฉุกเฉิน</caption>
+                        <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">หัวข้อ</th><th scope="col" role="columnheader" class="bg-herb-100 text-herb-900">แพทย์พื้นบ้าน</th><th scope="col" role="columnheader" class="bg-blue-100 text-blue-900">แพทย์แผนปัจจุบัน</th></tr></thead>
+                        <tbody role="rowgroup">
+                            <tr role="row"><th scope="row" role="rowheader">การอธิบายสาเหตุ</th><td role="cell"><span class="comparison-label text-herb-800" aria-hidden="true">แพทย์พื้นบ้าน</span>แนวคิดธาตุ เลือดลม หรือเส้น ตามองค์ความรู้เฉพาะถิ่น</td><td role="cell"><span class="comparison-label text-blue-800" aria-hidden="true">แพทย์แผนปัจจุบัน</span>ความผิดปกติของสมอง หลอดเลือด และระบบประสาท</td></tr>
+                            <tr role="row"><th scope="row" role="rowheader">การประเมิน</th><td role="cell"><span class="comparison-label text-herb-800" aria-hidden="true">แพทย์พื้นบ้าน</span>ซักประวัติ สังเกตอาการ และประเมินการเคลื่อนไหว/ร่างกายตามภูมิปัญญา ไม่แทนการตรวจในโรงพยาบาล</td><td role="cell"><span class="comparison-label text-blue-800" aria-hidden="true">แพทย์แผนปัจจุบัน</span>ตรวจระบบประสาท ภาพสมอง และปัจจัยเสี่ยง</td></tr>
+                            <tr role="row"><th scope="row" role="rowheader">ระยะฉุกเฉิน</th><td role="cell"><span class="comparison-label text-herb-800" aria-hidden="true">แพทย์พื้นบ้าน</span><strong>ไม่สามารถทดแทนการรักษาฉุกเฉินในโรงพยาบาล</strong></td><td role="cell"><span class="comparison-label text-blue-800" aria-hidden="true">แพทย์แผนปัจจุบัน</span>มีการรักษาจำเพาะเพื่อช่วยชีวิตและลดความเสียหายของสมอง</td></tr>
+                            <tr role="row"><th scope="row" role="rowheader">การฟื้นฟู</th><td role="cell"><span class="comparison-label text-herb-800" aria-hidden="true">แพทย์พื้นบ้าน</span>นวด ประคบ สมุนไพร ฝึกเคลื่อนไหว และสนับสนุนจากชุมชน เป็นการดูแลเสริมเมื่อประเมินแล้วว่าเหมาะสม</td><td role="cell"><span class="comparison-label text-blue-800" aria-hidden="true">แพทย์แผนปัจจุบัน</span>กายภาพบำบัด กิจกรรมบำบัด ฝึกพูด/กลืน และดูแลแบบสหวิชาชีพ</td></tr>
+                            <tr role="row"><th scope="row" role="rowheader">หลักฐาน</th><td role="cell"><span class="comparison-label text-herb-800" aria-hidden="true">แพทย์พื้นบ้าน</span>แตกต่างกันตามวิธี ส่วนหนึ่งเป็นบันทึกภูมิปัญญาและกรณีศึกษา ยังต้องวิจัยเพิ่มเติม</td><td role="cell"><span class="comparison-label text-blue-800" aria-hidden="true">แพทย์แผนปัจจุบัน</span>มีแนวทางเวชปฏิบัติและงานวิจัยรองรับการรักษาหลายวิธี</td></tr>
+                            <tr role="row"><th scope="row" role="rowheader">บทบาทที่เหมาะสม</th><td role="cell"><span class="comparison-label text-herb-800" aria-hidden="true">แพทย์พื้นบ้าน</span>ดูแลเสริมบางด้านหลังอาการคงที่และได้รับการประเมินความปลอดภัยจากทีมรักษา</td><td role="cell"><span class="comparison-label text-blue-800" aria-hidden="true">แพทย์แผนปัจจุบัน</span>วินิจฉัย รักษา ป้องกันการเกิดซ้ำ และเป็นแกนหลักของการฟื้นฟู</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section aria-labelledby="strokeModernHeading" class="space-y-4">
+                    <h3 id="strokeModernHeading" class="text-xl font-bold text-blue-900">แนวทางหลัก: การแพทย์แผนปัจจุบัน</h3>
+                    <ol class="grid md:grid-cols-3 gap-4 text-sm leading-relaxed">
+                        <li class="bg-blue-50 border border-blue-200 rounded-2xl p-5"><h4 class="font-bold text-blue-800">1. ระยะฉุกเฉิน</h4><p class="mt-2">ตรวจ CT/MRI แยกภาวะตีบกับแตก กรณีอุดตัน แพทย์อาจให้ยาละลายลิ่มเลือดหรือนำลิ่มเลือดออกผ่านสายสวนตามข้อบ่งชี้ ส่วนภาวะเลือดออกต้องควบคุมเลือดออกและภาวะแทรกซ้อน</p></li>
+                        <li class="bg-blue-50 border border-blue-200 rounded-2xl p-5"><h4 class="font-bold text-blue-800">2. ระยะฟื้นฟู</h4><p class="mt-2">กายภาพบำบัด กิจกรรมบำบัด ฝึกเดิน ฝึกใช้แขนขา รวมถึงฝึกพูดหรือกลืนตามความจำเป็น โดยทีมรักษาวางแผนตามสภาพผู้ป่วย</p></li>
+                        <li class="bg-blue-50 border border-blue-200 rounded-2xl p-5"><h4 class="font-bold text-blue-800">3. ป้องกันการเกิดซ้ำ</h4><p class="mt-2">ควบคุมความดันโลหิต เบาหวาน ไขมัน และโรคหัวใจ ใช้ยาตามแผนรักษาและติดตามกับทีมรักษาอย่างต่อเนื่อง</p></li>
+                    </ol>
+                </section>
+
+                <section aria-labelledby="strokeFolkHeading" class="space-y-4">
+                    <h3 id="strokeFolkHeading" class="text-xl font-bold text-herb-900">การดูแลเสริม: ภูมิปัญญาแพทย์พื้นบ้าน</h3>
+                    <p class="text-sm text-slate-600">เอกสารบันทึกรูปแบบการดูแลที่หลากหลาย ไม่ใช่คำแนะนำว่าทุกวิธีเหมาะกับผู้ป่วยทุกราย</p>
+                    <ul class="space-y-3 text-sm leading-relaxed">
+                        <li class="p-4 bg-herb-50 rounded-2xl"><strong class="text-herb-800">นวดพื้นบ้านและนวดจับเส้น:</strong> นวด คลึง หรือกดตามแนวเส้น บางแห่งใช้น้ำมันสมุนไพร โดยมีเป้าหมายตามภูมิปัญญาเพื่อคลายความตึงและดูแลอาการปวดเมื่อย ต้องประเมินความปลอดภัยก่อน</li>
+                        <li class="p-4 bg-herb-50 rounded-2xl"><strong class="text-herb-800">อบและประคบสมุนไพร:</strong> มีการใช้ไพล ตะไคร้ ขมิ้น หรือผิวมะกรูดประกอบการดูแลกล้ามเนื้อ ต้องระวังความร้อน โดยเฉพาะเมื่อสูญเสียความรู้สึก กรรมวิธีเสี่ยง เช่น การย่างไฟ ไม่แนะนำให้ทำเอง</li>
+                        <li class="p-4 bg-herb-50 rounded-2xl"><strong class="text-herb-800">สมุนไพรเฉพาะถิ่น:</strong> บางกลุ่มใช้ยาต้ม ยาผง หรือยาทาตามแนวคิดปรับธาตุและเลือดลม ต้องแจ้งทีมรักษาถึงสมุนไพรที่ใช้และประเมินผลกระทบต่อยาประจำ ไม่ให้สูตรหรือขนาดยาเพื่อใช้เอง</li>
+                        <li class="p-4 bg-herb-50 rounded-2xl"><strong class="text-herb-800">ฝึกเคลื่อนไหวในชุมชน:</strong> มีราวฝึกเดิน รอกฝึกแขน อุปกรณ์ฝึกกำ/แบมือ และเครื่องช่วยฝึกยืน โดยญาติร่วมดูแล ควรให้ทีมฟื้นฟูประเมินความเหมาะสม</li>
+                        <li class="p-4 bg-herb-50 rounded-2xl"><strong class="text-herb-800">ดูแลจิตใจและครอบครัว:</strong> การให้กำลังใจและการสนับสนุนจากชุมชน รวมถึงพิธีกรรมตามความเชื่อ มีบทบาทด้านจิตใจและสังคม แต่ไม่แทนการรักษาทางการแพทย์</li>
+                    </ul>
+                    <aside class="bg-amber-50 border border-amber-200 p-4 rounded-2xl text-sm leading-relaxed"><strong class="text-amber-900">ข้อจำกัดของหลักฐาน:</strong> บันทึกภูมิปัญญาและกรณีศึกษาไม่เพียงพอให้สรุปว่าทุกวิธีมีประสิทธิผลและปลอดภัยทางคลินิกในการฟื้นฟูโรคหลอดเลือดสมอง</aside>
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm leading-relaxed">
+                        <h4 class="font-bold">ข้อมูลแพทย์แผนไทย — แยกจากตำรับพื้นบ้าน</h4>
+                        <p class="mt-2">Word กล่าวถึงยาหอมทิพโอสถ ยาหอมเทพจิตร ยาหอมนวโกฐ และยาสหัศธาราในแนวทางแพทย์แผนไทยตามระยะและสภาพผู้ป่วย การแสดงชื่อเป็นข้อมูลจากเอกสาร ไม่ใช่คำแนะนำให้ซื้อหรือใช้เอง ต้องให้ผู้ประกอบวิชาชีพประเมิน</p>
+                    </div>
+                </section>
+
+                <section aria-labelledby="strokeSafetyHeading" class="bg-slate-50 rounded-2xl p-5 space-y-3 text-sm leading-relaxed">
+                    <h3 id="strokeSafetyHeading" class="text-xl font-bold">เมื่อใดจึงพิจารณาการดูแลเสริมได้?</h3>
+                    <p>หลังได้รับการวินิจฉัยและรักษาในโรงพยาบาลแล้ว อาการคงที่ และแพทย์หรือทีมฟื้นฟูประเมินว่าเหมาะสม เช่น การดูแลเสริมอาการปวดเมื่อยหรือตึงกล้ามเนื้อ <strong>ไม่หยุดยาและไม่ละเลยการฟื้นฟูตามแผนรักษา</strong></p>
+                    <p>ต้องระมัดระวังเป็นพิเศษในผู้ที่ใช้ยาต้านเกล็ดเลือดหรือยาต้านการแข็งตัวของเลือด มีข้อไหล่ไม่มั่นคง กล้ามเนื้อเกร็งรุนแรง หรือสูญเสียความรู้สึก โดยเฉพาะการนวดแรง ดัดข้อต่อ ประคบร้อน และใช้สมุนไพร</p>
+                    <p class="font-semibold text-herb-900">ไม่ใช่การเลือกศาสตร์หนึ่งแทนอีกศาสตร์ แต่คือการเข้าใจบทบาทและประสานกับทีมรักษาอย่างปลอดภัย</p>
+                </section>
+
+                <section aria-labelledby="strokeSourcesHeading" class="text-sm leading-relaxed">
+                    <h3 id="strokeSourcesHeading" class="text-xl font-bold mb-3">แหล่งข้อมูลและเอกสารอ้างอิง</h3>
+                    <p class="text-slate-600 mb-3">แหล่งเนื้อหา: “ร่าง อัมพาต.docx” ที่ผู้ใช้ให้มา รายการด้านล่างถอดจากเอกสาร <strong>ยังไม่ได้ตรวจสอบลิงก์ เนื้อหาต้นฉบับ หรือปีของแนวทาง</strong> จึงไม่ใช่การรับรองความถูกต้องของรายการอ้างอิง</p>
+                    <ol class="list-decimal pl-5 space-y-3 break-words">
+                        <li><a class="text-herb-700 underline" href="https://wangchaohosp.go.th/admin~s/20240808_page12_05-cpg%20Strokeแผนไทย67.pdf" target="_blank" rel="noopener noreferrer">โรงพยาบาลวังเจ้า: แนวทางการดูแลรักษาผู้ป่วยโรคอัมพฤกษ์ อัมพาต สำหรับงานแพทย์แผนไทย (พ.ศ. 2567 ตาม Word)</a><span class="block text-xs text-slate-500">ลิงก์จาก Word • ยังไม่ได้ตรวจสอบ • เปิดแท็บใหม่</span></li>
+                        <li><a class="text-herb-700 underline" href="https://ptim.dtam.moph.go.th/public-documents/2526/" target="_blank" rel="noopener noreferrer">สำนักการแพทย์พื้นบ้านไทย: องค์ความรู้การดูแลอัมพฤกษ์–อัมพาตของหมอพื้นบ้าน (2554 ตาม Word)</a><span class="block text-xs text-slate-500">ลิงก์จาก Word • ยังไม่ได้ตรวจสอบ • เปิดแท็บใหม่</span></li>
+                        <li><a class="text-herb-700 underline" href="https://ejournals.swu.ac.th/index.php/pharm/article/view/3944" target="_blank" rel="noopener noreferrer">อรทัย เนียมสุวรรณ และคณะ: การศึกษาองค์ความรู้การรักษาโรคอัมพฤกษ์–อัมพาตของหมอพื้นบ้าน กรณีศึกษาหมอสมพร สุดใจ จังหวัดชุมพร</a><span class="block text-xs text-slate-500">วารสารไทยเภสัชศาสตร์และวิทยาการสุขภาพ • ลิงก์จาก Word • ยังไม่ได้ตรวจสอบ • เปิดแท็บใหม่</span></li>
+                        <li>American Heart Association/American Stroke Association: 2026 Guideline for the Early Management of Patients With Acute Ischemic Stroke<span class="block text-xs text-slate-500">ชื่อและปีตาม Word • ไม่มี URL ในเอกสาร • ยังไม่ได้ตรวจสอบ</span></li>
+                        <li>American Heart Association/American Stroke Association: 2026 Guideline for Adult Stroke Rehabilitation and Recovery<span class="block text-xs text-slate-500">ชื่อและปีตาม Word • ไม่มี URL ในเอกสาร • ยังไม่ได้ตรวจสอบ</span></li>
+                        <li>American Stroke Association: Stroke, TIA and Warning Signs<span class="block text-xs text-slate-500">ชื่อตาม Word • ไม่มี URL ในเอกสาร • ยังไม่ได้ตรวจสอบ</span></li>
+                    </ol>
+                </section>
+                <footer class="border-t border-slate-200 pt-5">
+                    <p class="text-sm text-amber-900 bg-amber-50 p-4 rounded-xl">ข้อมูลนี้เพื่อการเรียนรู้ ไม่ใช่คำแนะนำในการวินิจฉัยหรือรักษาตนเอง และยังเป็นร่างรอตรวจทานโดยผู้เชี่ยวชาญก่อนเผยแพร่จริง</p>
+                    <button type="button" onclick="closeDiseaseDetail()" class="mt-4 text-sm font-semibold text-herb-700 hover:underline">กลับไปผลการค้นหา</button>
+                </footer>
+            </article>
+
+        </div>
+
+        <!-- ==================== TAB 2: RESEARCH EVIDENCE ==================== -->
+        <div id="view-research" class="hidden space-y-8 animate-fadeIn">
+            
+            <div class="bg-gradient-to-r from-emerald-800 to-teal-900 rounded-3xl p-6 sm:p-10 text-white shadow-xl">
+                <div class="max-w-2xl space-y-3">
+                    <span class="bg-white/20 text-white text-xs px-3 py-1 rounded-full font-medium">Research Evidence Hub</span>
+                    <h2 class="text-2xl sm:text-3xl font-bold">หลักฐานงานวิจัยประกอบตำรับและสมุนไพร</h2>
+                    <p class="text-emerald-100 text-sm">
+                        เชื่อมโยงตำรับยาพื้นบ้านกับฐานข้อมูลงานวิจัยทางวิทยาศาสตร์ พร้อมระบุระดับหลักฐานและข้อจำกัดทางการแพทย์อย่างโปร่งใส
+                    </p>
+                </div>
+            </div>
+
+            <!-- Search Recipe -->
+            <div class="flex gap-3">
+                <div class="flex-1 bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex items-center px-3">
+                    <i class="fa-solid fa-search text-slate-400 mr-3"></i>
+                    <input type="text" id="recipeSearchInput" oninput="filterRecipes()" placeholder="ค้นหาตำรับยา, สมุนไพร หรืออาการรักษา..." class="w-full bg-transparent text-sm focus:outline-none">
+                </div>
+            </div>
+
+            <!-- Recipes Grid -->
+            <div id="recipesContainer" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Dynamically rendered via JS -->
+            </div>
+        </div>
+
+        <!-- ==================== TAB 3: COMMUNITY HEALTH NETWORK ==================== -->
+        <div id="view-community" class="hidden space-y-8 animate-fadeIn">
+            
+            <div class="bg-gradient-to-r from-teal-800 to-herb-900 rounded-3xl p-6 sm:p-10 text-white shadow-xl">
+                <div class="max-w-2xl space-y-3">
+                    <span class="bg-white/20 text-white text-xs px-3 py-1 rounded-full font-medium">Community Care Integration</span>
+                    <h2 class="text-2xl sm:text-3xl font-bold">เครือข่ายบริการสุขภาพชุมชน (รพ.สต.)</h2>
+                    <p class="text-teal-100 text-sm">
+                        สะพานเชื่อมระหว่างการแพทย์พื้นบ้านและการแพทย์แผนปัจจุบัน ผ่านการทำงานร่วมกับโรงพยาบาลส่งเสริมสุขภาพตำบล (รพ.สต.)
+                    </p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-herb-100 space-y-4">
+                    <div class="w-12 h-12 rounded-2xl bg-herb-100 text-herb-700 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-handshake-angle"></i>
+                    </div>
+                    <h3 class="font-bold text-lg text-slate-800">การส่งต่อผู้ป่วยปลอดภัย</h3>
+                    <p class="text-slate-600 text-sm leading-relaxed">
+                        รพ.สต. และหมอพื้นบ้านร่วมมือกันคัดกรองอาการ หากเป็นโรคเรื้อรังหรือโรคซับซ้อน สามารถส่งต่อเข้าสู่ระบบโรงพยาบาลชุมชนได้อย่างไร้รอยต่อ
+                    </p>
+                </div>
+
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-herb-100 space-y-4">
+                    <div class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-file-shield"></i>
+                    </div>
+                    <h3 class="font-bold text-lg text-slate-800">มาตรฐานและความยินยอม</h3>
+                    <p class="text-slate-600 text-sm leading-relaxed">
+                        ข้อมูลทุกตำรับผ่านความยินยอมจากหมอพื้นบ้าน พร้อมบันทึกประวัติการรักษาอย่างเป็นระบบภายใต้กฎหมายคุ้มครองภูมิปัญญา
+                    </p>
+                </div>
+
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-herb-100 space-y-4">
+                    <div class="w-12 h-12 rounded-2xl bg-teal-100 text-teal-700 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-hospital"></i>
+                    </div>
+                    <h3 class="font-bold text-lg text-slate-800">คลินิกหมอพื้นบ้านใน รพ.สต.</h3>
+                    <p class="text-slate-600 text-sm leading-relaxed">
+                        จัดสรรพื้นที่บริการทางเลือกใน รพ.สต. นำร่อง ให้หมอพื้นบ้านมาให้คำปรึกษาและบำบัดรักษาตามภูมิปัญญาที่ผ่านการรับรอง
+                    </p>
+                </div>
+            </div>
+
+            <!-- Partner Hospitals List -->
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-herb-100 space-y-4">
+                <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-location-crosshairs text-herb-600"></i> รพ.สต. เครือข่ายนำร่อง
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="p-4 rounded-2xl bg-herb-50/50 border border-herb-100 flex items-center justify-between">
+                        <div>
+                            <h4 class="font-bold text-slate-800 text-sm">รพ.สต.บ้านป่าแป๋ จ.เชียงใหม่</h4>
+                            <p class="text-xs text-slate-500 mt-0.5">ประสานงาน: หมอยาสมุนไพร & หมอกระดูก</p>
+                        </div>
+                        <button onclick="alertContact('รพ.สต.บ้านป่าแป๋')" class="bg-herb-700 hover:bg-herb-800 text-white text-xs px-3 py-2 rounded-xl font-medium transition">
+                            <i class="fa-solid fa-phone mr-1"></i> ติดต่อประสาน
+                        </button>
+                    </div>
+                    <div class="p-4 rounded-2xl bg-herb-50/50 border border-herb-100 flex items-center justify-between">
+                        <div>
+                            <h4 class="font-bold text-slate-800 text-sm">รพ.สต.หนองไฮ จ.อุบลราชธานี</h4>
+                            <p class="text-xs text-slate-500 mt-0.5">ประสานงาน: หมอรักษาสัตว์พิษกัด & หมอตำแย</p>
+                        </div>
+                        <button onclick="alertContact('รพ.สต.หนองไฮ')" class="bg-herb-700 hover:bg-herb-800 text-white text-xs px-3 py-2 rounded-xl font-medium transition">
+                            <i class="fa-solid fa-phone mr-1"></i> ติดต่อประสาน
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB 4: THAI WISDOM EXCELLENCE ==================== -->
+        <div id="view-excellence" class="hidden space-y-8 animate-fadeIn">
+            <div class="bg-gradient-to-r from-earth-800 via-earth-600 to-herb-800 p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
+                <div class="relative z-10">
+                    <span class="bg-gold-500 text-slate-900 text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">
+                        🏆 National Thai Wisdom Award
+                    </span>
+                    <h2 class="text-3xl font-bold mt-3">Thai Wisdom Excellence – ทำเนียบหมอไทยดีเด่นแห่งชาติ</h2>
+                    <p class="text-earth-100 text-sm mt-1 max-w-2xl">รวบรวมประวัติ ผลงาน ภูมิปัญญา และตำรับยาของหมอไทยดีเด่นแห่งชาติในแต่ละปี เพื่อสนับสนุนการอนุรักษ์และถ่ายทอดสู่คนรุ่นหลัง</p>
+                </div>
+            </div>
+
+            <!-- User Flow Demonstrator -->
+            <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">สาธิต User Flow: เลือกปี → เลือกบุคคล → สำรวจองค์ความรู้</h3>
+                <div class="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
+                    <button class="px-4 py-2 rounded-xl bg-gold-500 text-slate-900 font-bold text-xs shadow-sm">พ.ศ. 2568</button>
+                    <button class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-medium text-xs hover:bg-slate-200">พ.ศ. 2567</button>
+                    <button class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-medium text-xs hover:bg-slate-200">พ.ศ. 2566</button>
+                    <button class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-medium text-xs hover:bg-slate-200">พ.ศ. 2565</button>
+                </div>
+            </div>
+
+            <!-- Outstanding Healer Profile Showcase -->
+            <div class="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-lg grid grid-cols-1 lg:grid-cols-12">
+                <div class="lg:col-span-4 bg-earth-50 p-6 border-r border-slate-200 flex flex-col justify-between">
+                    <div>
+                        <div class="w-24 h-24 rounded-2xl bg-earth-200 border-2 border-gold-500 mx-auto mb-4 flex items-center justify-center text-earth-800 text-2xl font-bold shadow-md">
+                            พ่อหมอ
+                        </div>
+                        <div class="text-center">
+                            <span class="text-xs font-bold text-gold-600 uppercase">หมอไทยดีเด่นแห่งชาติ พ.ศ. 2568</span>
+                            <h3 class="text-xl font-bold text-slate-800 mt-1">พ่อหมอทองดี สุวรรณประสิทธิ์</h3>
+                            <p class="text-xs text-slate-500 mt-1">จ.สกลนคร (เชี่ยวชาญยาสมุนไพรและกระดูก)</p>
+                        </div>
+                        <p class="text-xs text-slate-600 mt-4 leading-relaxed bg-white p-3 rounded-xl border border-earth-100">
+                            "ผู้ทุ่มเทชีวิตกว่า 40 ปีในการเก็บรวบรวมตำรับยาสมุนไพรพื้นบ้าน และถ่ายทอดองค์ความรู้การต้มยาสมุนไพรดูแลสุขภาพคนในชุมชนโดยไม่คิดค่าตอบแทน"
+                        </p>
+                    </div>
+                    <div class="mt-6">
+                        <button onclick="switchTab('home')" class="w-full bg-herb-600 hover:bg-herb-700 text-white text-xs font-bold py-2.5 rounded-xl transition shadow">
+                            📍 ดูตำแหน่งบนแผนที่บริการ
+                        </button>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-8 p-6 flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-800 flex items-center gap-2 mb-4">
+                            <i class="fa-solid fa-code-merge text-herb-600"></i> การเชื่อมโยงองค์ความรู้และระบบสุขภาพ
+                        </h3>
+
+                        <div class="space-y-4">
+                            <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-3">
+                                <div class="w-8 h-8 shrink-0 flex items-center justify-center bg-herb-100 text-herb-700 rounded-lg"><i class="fa-solid fa-book-open text-sm"></i></div>
+                                <div>
+                                    <h4 class="text-xs font-bold text-slate-800">ตำรับยาที่สืบทอดและได้รับอนุญาตเผยแพร่</h4>
+                                    <p class="text-xs text-slate-600 mt-0.5">ตำรับยาน้ำมันไพลสดกลั่น และ ตำรับยาต้มแก้อัมพฤกษ์เบื้องต้น</p>
+                                </div>
+                            </div>
+
+                            <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-3">
+                                <div class="w-8 h-8 shrink-0 flex items-center justify-center bg-blue-100 text-blue-700 rounded-lg"><i class="fa-solid fa-file-circle-check text-sm"></i></div>
+                                <div>
+                                    <h4 class="text-xs font-bold text-slate-800">หลักฐานงานวิจัยที่เกี่ยวข้อง</h4>
+                                    <p class="text-xs text-slate-600 mt-0.5">พบงานวิจัยรองรับ 2 ฉบับ (ระดับทดสอบสารสกัดไพล และการทดลองทางคลินิกตำรับน้ำมันไพล)</p>
+                                </div>
+                            </div>
+
+                            <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-3">
+                                <div class="w-8 h-8 shrink-0 flex items-center justify-center bg-emerald-100 text-emerald-700 rounded-lg"><i class="fa-solid fa-building text-sm"></i></div>
+                                <div>
+                                    <h4 class="text-xs font-bold text-slate-800">การมีส่วนร่วมในระบบสุขภาพชุมชน</h4>
+                                    <p class="text-xs text-slate-600 mt-0.5">ปฏิบัติงานร่วมกับ รพ.สต. บ้านสว่าง จัดตรวจสุขภาพด้วยภูมิปัญญาไทยทุกสัปดาห์</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 mt-4 border-t border-slate-100 flex justify-end">
+                        <button onclick="switchTab('library')" class="text-xs font-bold text-herb-700 hover:text-herb-800 flex items-center gap-1">
+                            สำรวจคลังตำรับยาของหมอไทยดีเด่นทั้งหมด <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== ROLE 2: STAFF / RESEARCHER ==================== -->
+        <div id="view-staff" class="hidden space-y-12 animate-fadeIn">
+
+        <!-- Researcher export tools -->
+        <div id="view-researcher-tools" class="space-y-8">
+            <div class="bg-gradient-to-r from-teal-900 to-indigo-900 rounded-3xl p-6 sm:p-10 text-white shadow-xl">
+                <div class="max-w-2xl space-y-3">
+                    <span class="bg-white/20 text-white text-xs px-3 py-1 rounded-full font-medium">Researcher & Academic Hub</span>
+                    <h2 class="text-2xl sm:text-3xl font-bold">เครื่องมือค้นหาตำรับและส่งออกข้อมูลอ้างอิง</h2>
+                    <p class="text-indigo-100 text-sm">
+                        สำหรับนักวิจัยและนักวิชาการในการสำรวจช่องว่างทางหลักฐาน (Evidence Gap) และส่งออกชุดข้อมูลอ้างอิงเพื่อการต่อยอดงานวิจัย
+                    </p>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-herb-100 space-y-6">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <h3 class="font-bold text-slate-800 text-base">ฐานข้อมูลตำรับยาและงานวิจัยที่เชื่อมโยง</h3>
+                    <div class="flex gap-2 w-full sm:w-auto">
+                        <button onclick="exportData('bibtex')" class="flex-1 sm:flex-none bg-slate-800 hover:bg-slate-900 text-white px-4 py-2.5 rounded-xl text-xs font-semibold transition">
+                            <i class="fa-solid fa-file-code mr-1.5"></i> ส่งออก BibTeX
+                        </button>
+                        <button onclick="exportData('csv')" class="flex-1 sm:flex-none bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2.5 rounded-xl text-xs font-semibold transition">
+                            <i class="fa-solid fa-file-csv mr-1.5"></i> ดาวน์โหลด CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Table of References -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 text-slate-600 text-xs uppercase tracking-wider">
+                            <tr>
+                                <th class="p-3.5 rounded-l-xl">ชื่อตำรับยา / สมุนไพร</th>
+                                <th class="p-3.5">สรรพคุณเบื้องต้น</th>
+                                <th class="p-3.5">ระดับหลักฐานงานวิจัย</th>
+                                <th class="p-3.5 rounded-r-xl">เอกสารอ้างอิง / DOI</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100" id="researcherTableBody">
+                            <!-- Populated via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        </div>
+
+        <!-- ==================== ROLE 3: ADMIN (side menu) ==================== -->
+        <div id="view-admin" class="hidden animate-fadeIn">
+            <div class="flex flex-col lg:flex-row gap-6">
+                <aside class="lg:w-64 shrink-0">
+                    <div class="bg-white rounded-3xl border border-herb-100 shadow-sm p-3 lg:sticky lg:top-28 space-y-1">
+                        <div class="px-3 pt-2 pb-3 flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                            <i class="fa-solid fa-user-gear text-herb-600"></i> Admin Console
+                        </div>
+                        <nav class="flex lg:flex-col gap-1 overflow-x-auto hide-scrollbar">
+                            <button id="admin-nav-overview" onclick="switchAdminSection('overview')" class="admin-nav-btn flex-1 lg:flex-none whitespace-nowrap flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-herb-800 bg-herb-100 transition-all">
+                                <i class="fa-solid fa-chart-pie w-5 text-center"></i> ภาพรวมและอนุมัติหมอพื้นบ้าน
+                                <span id="adminPendingBadge" class="hidden ml-auto bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full"></span>
+                            </button>
+                            <button id="admin-nav-register" onclick="switchAdminSection('register')" class="admin-nav-btn flex-1 lg:flex-none whitespace-nowrap flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium text-slate-600 hover:bg-herb-50 hover:text-herb-800 transition-all">
+                                <i class="fa-solid fa-file-pen w-5 text-center"></i> ลงทะเบียนหมอพื้นบ้าน
+                            </button>
+                        </nav>
+                    </div>
+                </aside>
+
+                <div class="flex-1 min-w-0">
+                    <!-- Section 1: Overview + Approvals -->
+                    <section id="admin-section-overview" class="space-y-6">
+                        <div class="bg-gradient-to-r from-slate-900 to-herb-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl">
+                            <div class="max-w-2xl space-y-2">
+                                <span class="bg-white/20 text-white text-xs px-3 py-1 rounded-full font-medium">Admin Console</span>
+                                <h2 class="text-2xl sm:text-3xl font-bold">ภาพรวมและอนุมัติหมอพื้นบ้าน</h2>
+                                <p class="text-slate-200 text-sm">ติดตามภาพรวมข้อมูลในระบบ ตรวจสอบและอนุมัติหมอพื้นบ้านที่ลงทะเบียน รวมถึงมอบหรือยกเลิกตราหมอไทยดีเด่น</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 xl:grid-cols-4 gap-4" id="adminStats"></div>
+                        <div class="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-herb-100 space-y-4">
+                            <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                                <i class="fa-solid fa-clipboard-check text-herb-600"></i> รายการตรวจสอบและอนุมัติหมอพื้นบ้าน
+                            </h3>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-sm">
+                                    <thead class="bg-slate-50 text-slate-600 text-xs uppercase tracking-wider">
+                                        <tr>
+                                            <th class="p-3.5 rounded-l-xl">ชื่อ</th>
+                                            <th class="p-3.5">ประเภท / พื้นที่</th>
+                                            <th class="p-3.5">เลขที่ใบรับรอง</th>
+                                            <th class="p-3.5">สถานะ</th>
+                                            <th class="p-3.5 rounded-r-xl text-right">การดำเนินการ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100" id="adminTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Section 2: Healer registration -->
+                    <section id="admin-section-register" class="hidden">
+        <div id="view-healer-dashboard" class="space-y-8">
+            <div class="bg-gradient-to-r from-amber-700 to-herb-800 rounded-3xl p-6 sm:p-10 text-white shadow-xl">
+                <div class="max-w-2xl space-y-3">
+                    <span class="bg-white/20 text-white text-xs px-3 py-1 rounded-full font-medium">Healer Portal & Registration</span>
+                    <h2 class="text-2xl sm:text-3xl font-bold">ระบบลงทะเบียนและจัดการข้อมูลหมอพื้นบ้าน</h2>
+                    <p class="text-amber-100 text-sm">
+                        สำหรับเจ้าหน้าที่ผู้บันทึกข้อมูลโปรไฟล์และตำรับยา เพื่อตรวจสอบความถูกต้องและยืนยันว่าได้รับความยินยอมในการเผยแพร่จากหมอพื้นบ้านหรือผู้แทนที่มีอำนาจให้ความยินยอมแล้ว
+                    </p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Registration Form -->
+                <div class="lg:col-span-2 bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-herb-100 space-y-6">
+                    <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-file-pen text-herb-600"></i> แบบฟอร์มเพิ่ม/อัปเดตข้อมูลหมอและตำรับยา
+                    </h3>
+                    
+                    <form onsubmit="handleRegistrationSubmit(event)" class="space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">ชื่อ - นามสกุล (หรือฉายาที่ได้รับอนุญาต)</label>
+                                <input type="text" required id="regName" placeholder="เช่น พ่อหมอสมชาย ใจดี" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">ประเภทหมอพื้นบ้าน</label>
+                                <select id="regType" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm focus:outline-none">
+                                    <option value="หมอยาสมุนไพร">หมอยาสมุนไพร</option>
+                                    <option value="หมอรักษาสัตว์พิษกัด">หมอรักษาสัตว์พิษกัด</option>
+                                    <option value="หมอตำแย">หมอตำแย</option>
+                                    <option value="หมอนวดพื้นบ้าน">หมอนวดพื้นบ้าน</option>
+                                    <option value="หมอพิธีกรรม">หมอพิธีกรรม</option>
+                                    <option value="หมอกระดูก">หมอกระดูก</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">พื้นที่ปฏิบัติงาน (อำเภอ / จังหวัด)</label>
+                                <input type="text" required id="regArea" placeholder="เช่น อ.แม่ริม จ.เชียงใหม่" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">เลขที่ใบรับรอง (จากกรมการแพทย์แผนไทยฯ)</label>
+                                <input type="text" required id="regCert" placeholder="เช่น TH-MED-2024-589" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm focus:outline-none">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">ความเชี่ยวชาญ & ตำรับยาหลัก</label>
+                            <textarea rows="3" required id="regDesc" placeholder="อธิบายประวัติความเชี่ยวชาญ และชื่อตำรับยาพื้นบ้าน..." class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm focus:outline-none"></textarea>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100 flex items-start gap-3">
+                            <input type="checkbox" required id="regConsent" aria-describedby="regConsentHelp" class="mt-1 w-4 h-4 text-herb-600 rounded border-slate-300 focus:ring-herb-500">
+                            <div class="text-xs text-slate-700 leading-relaxed space-y-2">
+                                <label for="regConsent" class="block">
+                                    <span class="font-bold text-herb-900">ยืนยันการตรวจสอบความยินยอมก่อนเผยแพร่:</span> ข้าพเจ้าขอยืนยันว่า ได้ตรวจสอบแล้วว่าหมอพื้นบ้าน หรือผู้แทนที่มีอำนาจให้ความยินยอม ได้ตรวจสอบและรับรองความถูกต้องของข้อมูลที่จะเผยแพร่ และได้ให้ความยินยอมในการเผยแพร่ข้อมูลดังกล่าวผ่านแพลตฟอร์ม "หมอถิ่น MohThin" ตามขอบเขตที่ตกลงไว้แล้ว
+                                </label>
+                                <p id="regConsentHelp" class="text-slate-600">โปรดตรวจสอบว่าความยินยอมครอบคลุมข้อมูลที่จะเผยแพร่ในครั้งนี้ การเลือกช่องนี้เป็นการยืนยันของผู้บันทึกข้อมูล ไม่ใช่การให้ความยินยอมแทนหมอพื้นบ้าน หากยังไม่ได้รับความยินยอม หรือขอบเขตยังไม่ชัดเจน โปรดประสานให้เรียบร้อยก่อนส่งข้อมูล</p>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full bg-herb-700 hover:bg-herb-800 text-white p-3.5 rounded-xl font-bold text-sm transition shadow-lg shadow-herb-700/20">
+                            <i class="fa-solid fa-paper-plane mr-2"></i> ส่งข้อมูลเพื่อรอตรวจสอบ (Verification & AI Pipeline)
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Status & Process Guide -->
+                <div class="space-y-6">
+                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-herb-100 space-y-4">
+                        <h4 class="font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-gears text-herb-600"></i> กระบวนการตรวจสอบข้อมูล (Data Flow)
+                        </h4>
+                        <ul class="space-y-3 text-xs text-slate-600">
+                            <li class="flex items-start gap-2">
+                                <div class="w-5 h-5 rounded-full bg-herb-100 text-herb-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</div>
+                                <span><b>กรอกข้อมูลและตรวจสอบความยินยอม:</b> บันทึกรายละเอียดโปรไฟล์และตำรับยา พร้อมตรวจสอบว่าได้รับความยินยอมครอบคลุมข้อมูลที่จะเผยแพร่แล้ว</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <div class="w-5 h-5 rounded-full bg-herb-100 text-herb-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</div>
+                                <span><b>AI สกัดและจัดโครงสร้าง:</b> ระบบ AI ช่วยจัดหมวดหมู่สมุนไพรและอาการ</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <div class="w-5 h-5 rounded-full bg-herb-100 text-herb-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</div>
+                                <span><b>ตรวจสอบสถานะการรับรอง:</b> เจ้าหน้าที่ตรวจสอบกับฐานข้อมูลต้นทาง</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <div class="w-5 h-5 rounded-full bg-herb-100 text-herb-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">4</div>
+                                <span><b>แสดงผลบนแผนที่:</b> เผยแพร่โปรไฟล์พร้อมตราหมอไทยดีเด่น</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+                    </section>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Detail Modal for Healer Profile -->
+    <div id="healerModal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-scaleUp max-h-[90vh] flex flex-col">
+            <div id="modalContent" class="p-6 sm:p-8 overflow-y-auto space-y-6">
+                <!-- Dynamically populated -->
+            </div>
+            <div class="bg-slate-50 p-4 border-t border-slate-100 flex justify-end">
+                <button onclick="closeModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-5 py-2 rounded-xl text-sm font-semibold transition">
+                    ปิดหน้าต่าง
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-auto bg-white border-t border-herb-100 py-8 text-center text-xs text-slate-500">
+        <div class="max-w-7xl mx-auto px-4 space-y-2">
+            <p class="font-semibold text-slate-700">หมอถิ่น MohThin — แพลตฟอร์มเพื่อการสืบสานและคุ้มครองภูมิปัญญาไทย</p>
+            <p>พัฒนาขึ้นเพื่อแสดงต้นแบบ Interactive Prototype ตามเกณฑ์การประกวดและพัฒนานวัตกรรมสุขภาพ</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        const healersData = [
+            {
+                id: 1,
+                name: "พ่อหมอคำใส นธวงศ์",
+                type: "หมอยาสมุนไพร",
+                area: "ต.ป่าแป๋ อ.แม่ริม จ.เชียงใหม่",
+                cert: "TH-MED-2024-012",
+                status: "ได้รับการรับรองแล้ว",
+                isOutstanding: true,
+                experience: "ประสบการณ์กว่า 40 ปี เชี่ยวชาญการใช้สมุนไพรพื้นบ้านล้านนา แก้ไข้ แก้ปวดเมื่อย และบำรุงกำลัง",
+                recipes: ["ตำรับยาประสะกานพลู", "ยาต้มแก้กษัยเส้น"],
+                hospital: "รพ.สต.บ้านป่าแป๋",
+                phone: "081-234-5678",
+                lat: 18.90, lng: 98.95
+            },
+            {
+                id: 2,
+                name: "แม่หมอบัวลอย ศรีสุวรรณ",
+                type: "หมอกระดูก",
+                area: "ต.หนองไฮ อ.เมือง จ.อุบลราชธานี",
+                cert: "TH-MED-2023-445",
+                status: "ได้รับการรับรองแล้ว",
+                isOutstanding: true,
+                experience: "สืบทอดภูมิปัญญาการรักษากระดูกหัก กระดูกร้าวด้วยสมุนไพรพอกและคาถาประสานกระดูก",
+                recipes: ["ยาสมุนไพรพอกประสานกระดูก"],
+                hospital: "รพ.สต.หนองไฮ",
+                phone: "089-876-5432",
+                lat: 15.24, lng: 104.85
+            },
+            {
+                id: 3,
+                name: "พ่อหมอสม ญาณวโร",
+                type: "หมอนวดพื้นบ้าน",
+                area: "ต.เกาะพะงัน อ.เกาะพะงัน จ.สุราษฎร์ธานี",
+                cert: "TH-MED-2025-889",
+                status: "ได้รับการรับรองแล้ว",
+                isOutstanding: false,
+                experience: "เชี่ยวชาญการนวดจับเส้น แก้ปัญหาอาการออฟฟิศซินโดรมและเส้นเอ็นจมตามภูมิปัญญาภาคใต้",
+                recipes: ["น้ำมันไพลสดประคบเส้น"],
+                hospital: "รพ.สต.เกาะพะงัน",
+                phone: "082-333-4455",
+                lat: 9.75, lng: 100.03
+            }
+        ];
+
+        const recipesData = [
+            {
+                id: 101,
+                name: "ตำรับยาประสะกานพลู",
+                herb: "กานพลู, ขิง, พริกไทย, โกฎ",
+                indication: "แก้ปวดท้อง จุกเสียด แน่นเฟ้อ",
+                evidenceLevel: "ระดับเบื้องต้น (In vitro / Animal study)",
+                summary: "มีงานวิจัยระบุว่าน้ำมันหอมระเหยในกานพลูมีฤทธิ์ต้านการอักเสบและขับลม ช่วยลดอาการเกร็งของลำไส้",
+                limitations: "ยังไม่มีการทดลองทางคลินิกขนาดใหญ่ในมนุษย์ ควรระวังการใช้ในสตรีมีครรภ์",
+                doi: "DOI: 10.1016/j.jep.2021.11452"
+            },
+            {
+                id: 102,
+                name: "ยาสมุนไพรพอกประสานกระดูก",
+                herb: "เถาเอ็นอ่อน, เฝือกไม้ไผ่, ว่านร่อนทอง",
+                indication: "สมานกระดูกและลดอาการบวมอักเสบ",
+                evidenceLevel: "ระดับภูมิปัญญาดั้งเดิม (Traditional Evidence)",
+                summary: "ใช้สืบทอดกันมานาน ช่วยลดอาการบวมและกระตุ้นการไหลเวียนเลือดเฉพาะที่",
+                limitations: "กรณีดกระดูกหักผิดรูปควรรับการรักษาจากแพทย์แผนปัจจุบันร่วมด้วย",
+                doi: "DOI: 10.14456/jhom.2023.12"
+            },
+            {
+                id: 103,
+                name: "น้ำมันไพลสดประคบเส้น",
+                herb: "เหง้าไพล, ผิวมะกรูด, การบูร",
+                indication: "บรรเทาอาการปวดเมื่อยกล้ามเนื้อ",
+                evidenceLevel: "ระดับคลินิกสนับสนุน (Clinical Trial)",
+                summary: "มีงานวิจัยรับรองว่าสาร Curcuminoid ในไพลมีฤทธิ์ลดการอักเสบทัดเทียมยากลุ่ม NSAIDs ภายนอก",
+                limitations: "ห้ามทาบริเวณแผลเปิดหรือเยื่อบุอ่อน",
+                doi: "DOI: 10.1080/13880209.2020.1789"
+            }
+        ];
+
+        let currentCategory = 'all';
+
+        // Avatars are generated from the name prefix so they always match the name's gender
+        const FEMALE_PREFIXES = ['แม่', 'นางสาว', 'นาง', 'น.ส.', 'ป้า', 'ยาย'];
+        const MALE_PREFIXES = ['พ่อ', 'นาย', 'ลุง', 'ตา'];
+
+        function avatarGender(name) {
+            const n = name.trim();
+            if (FEMALE_PREFIXES.some(p => n.startsWith(p))) return 'female';
+            if (MALE_PREFIXES.some(p => n.startsWith(p))) return 'male';
+            return 'neutral';
+        }
+
+        function avatarSrc(h) {
+            const gender = avatarGender(h.name);
+            const skin = '#f1c9a5';
+            const cloth = gender === 'female' ? '#b45309' : gender === 'male' ? '#15803d' : '#64748b';
+            const hairBack = gender === 'female' ? '<ellipse cx="50" cy="48" rx="25" ry="30" fill="#374151"/><circle cx="50" cy="14" r="9" fill="#374151"/>' : '';
+            const hairTop = gender === 'female'
+                ? '<path d="M27 42 Q28 18 50 18 Q72 18 73 42 Q60 30 50 30 Q40 30 27 42Z" fill="#374151"/>'
+                : gender === 'male'
+                    ? '<path d="M30 42 Q30 20 50 20 Q70 20 70 42 Q62 32 50 32 Q38 32 30 42Z" fill="#6b7280"/>'
+                    : '';
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#dcfce7"/>${hairBack}<path d="M12 100 Q14 70 50 68 Q86 70 88 100Z" fill="${cloth}"/><rect x="44" y="58" width="12" height="14" fill="${skin}"/><circle cx="50" cy="44" r="21" fill="${skin}"/>${hairTop}<circle cx="42" cy="46" r="2" fill="#1f2937"/><circle cx="58" cy="46" r="2" fill="#1f2937"/><path d="M43 55 Q50 60 57 55" stroke="#9a3412" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`;
+            return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        }
+
+        // Demo map: district/province-level coordinates only (PDPA-friendly)
+        const provinceCoords = {
+            "เชียงใหม่": [18.79, 98.98], "เชียงราย": [19.91, 99.83], "สกลนคร": [17.16, 104.15],
+            "ขอนแก่น": [16.44, 102.83], "นครราชสีมา": [14.98, 102.10], "อุบลราชธานี": [15.24, 104.85],
+            "พระนครศรีอยุธยา": [14.35, 100.57], "กรุงเทพมหานคร": [13.75, 100.50], "นครศรีธรรมราช": [8.43, 99.96],
+            "สุราษฎร์ธานี": [9.14, 99.33], "สงขลา": [7.19, 100.59], "ภูเก็ต": [7.88, 98.39]
+        };
+        const THAILAND_CENTER = [13.5, 100.9];
+        const categoryStyle = {
+            "หมอยาสมุนไพร": { icon: "fa-mortar-pestle", color: "#15803d" },
+            "หมอรักษาสัตว์พิษกัด": { icon: "fa-shield-cat", color: "#7c3aed" },
+            "หมอตำแย": { icon: "fa-child-reaching", color: "#db2777" },
+            "หมอนวดพื้นบ้าน": { icon: "fa-hands-bubbles", color: "#0d9488" },
+            "หมอพิธีกรรม": { icon: "fa-fire", color: "#ea580c" },
+            "หมอกระดูก": { icon: "fa-bone", color: "#b45309" }
+        };
+
+        let healerMap = null;
+        let markerLayer = null;
+        const markersById = {};
+
+        function initMap() {
+            if (!window.L) {
+                document.getElementById('mapFallback').classList.remove('hidden');
+                return;
+            }
+            healerMap = L.map('healerMap', { scrollWheelZoom: false }).setView(THAILAND_CENTER, 5);
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 18,
+                attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, OpenStreetMap contributors'
+            }).addTo(healerMap);
+            markerLayer = L.layerGroup().addTo(healerMap);
+        }
+
+        function resolveCoords(h) {
+            if (typeof h.lat !== 'number') {
+                const province = Object.keys(provinceCoords).find(p => h.area.includes(p));
+                const base = province ? provinceCoords[province] : THAILAND_CENTER;
+                h.lat = base[0] + (Math.random() - 0.5) * 0.1;
+                h.lng = base[1] + (Math.random() - 0.5) * 0.1;
+            }
+            return [h.lat, h.lng];
+        }
+
+        function updateMapPins(list) {
+            if (!healerMap) return;
+            markerLayer.clearLayers();
+            Object.keys(markersById).forEach(k => delete markersById[k]);
+
+            list.forEach(h => {
+                const style = categoryStyle[h.type] || { icon: 'fa-leaf', color: '#15803d' };
+                const icon = L.divIcon({
+                    className: 'mt-pin',
+                    html: `<div class="mt-pin-dot${h.isOutstanding ? ' outstanding' : ''}" style="background:${style.color}"><i class="fa-solid ${style.icon}"></i></div>`,
+                    iconSize: [34, 34],
+                    iconAnchor: [17, 17],
+                    popupAnchor: [0, -18]
+                });
+                const marker = L.marker(resolveCoords(h), { icon, title: h.name }).addTo(markerLayer);
+                marker.bindPopup(`
+                    <div style="font-family:Sarabun,sans-serif;min-width:160px">
+                        <div style="font-weight:700">${escapeHtml(h.name)}</div>
+                        <div style="font-size:12px;color:#15803d">${escapeHtml(h.type)}</div>
+                        <div style="font-size:11px;color:#64748b;margin-bottom:6px">${escapeHtml(h.area)}</div>
+                        <button onclick="openHealerDetail(${h.id})" style="font-size:12px;font-weight:600;color:#fff;background:#15803d;border-radius:8px;padding:4px 10px">ดูโปรไฟล์ & ตำรับยา</button>
+                    </div>`);
+                markersById[h.id] = marker;
+            });
+
+            if (list.length > 0) {
+                healerMap.fitBounds(L.latLngBounds(list.map(resolveCoords)), { padding: [40, 40], maxZoom: 9 });
+            }
+        }
+
+        function focusOnMap(id) {
+            const marker = markersById[id];
+            if (!marker || !healerMap) return;
+            document.getElementById('healerMap').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            healerMap.flyTo(marker.getLatLng(), 10);
+            marker.openPopup();
+        }
+
+        function renderHealers(list) {
+            const container = document.getElementById('healersListContainer');
+            document.getElementById('healerCount').innerText = list.length + ' ท่าน';
+            updateMapPins(list);
+            
+            if (list.length === 0) {
+                container.innerHTML = `<div class="p-8 text-center bg-white rounded-2xl border border-slate-200 text-slate-500">ไม่พบข้อมูลหมอพื้นบ้านที่ตรงกับเงื่อนไข</div>`;
+                return;
+            }
+
+            container.innerHTML = list.map(h => `
+                <div class="bg-white p-5 rounded-3xl shadow-sm border border-herb-100 hover:shadow-md transition flex flex-col sm:flex-row gap-5 items-start sm:items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <img src="${avatarSrc(h)}" alt="${escapeHtml(h.name)}" class="w-16 h-16 rounded-2xl object-cover border-2 border-herb-200 shadow-sm">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h4 class="font-bold text-slate-800 text-base">${h.name}</h4>
+                                ${h.isOutstanding ? '<span class="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1"><i class="fa-solid fa-award"></i> หมอไทยดีเด่น</span>' : ''}
+                            </div>
+                            <p class="text-xs text-herb-700 font-medium"><i class="fa-solid fa-tag mr-1"></i> ${h.type} &bull; <span class="text-slate-500">${h.area}</span></p>
+                            <p class="text-xs text-slate-500 line-clamp-1">${h.experience}</p>
+                        </div>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <button onclick="focusOnMap(${h.id})" class="bg-white hover:bg-herb-50 text-herb-800 px-4 py-2.5 rounded-xl font-semibold text-xs transition border border-herb-200 whitespace-nowrap flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-location-dot"></i> ดูบนแผนที่
+                        </button>
+                        <button onclick="openHealerDetail(${h.id})" class="bg-herb-50 hover:bg-herb-100 text-herb-800 px-4 py-2.5 rounded-xl font-semibold text-xs transition border border-herb-200 whitespace-nowrap flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-eye"></i> ดูโปรไฟล์ & ตำรับยา
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterHealers() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const province = document.getElementById('provinceFilter').value;
+
+            let filtered = healersData.filter(h => {
+                const matchQuery = h.name.toLowerCase().includes(query) || h.area.toLowerCase().includes(query) || h.experience.toLowerCase().includes(query);
+                const matchProvince = province === '' || h.area.includes(province);
+                const matchCat = currentCategory === 'all' || h.type === currentCategory;
+                return matchQuery && matchProvince && matchCat;
+            });
+
+            renderHealers(filtered);
+        }
+
+        function setCategory(cat) {
+            currentCategory = cat;
+            document.querySelectorAll('.category-btn').forEach(btn => {
+                btn.classList.remove('bg-herb-800', 'text-white', 'shadow-sm');
+                btn.classList.add('bg-white', 'text-slate-700', 'border', 'border-slate-200');
+            });
+            const activeBtn = document.getElementById(`cat-${cat}`);
+            if(activeBtn) {
+                activeBtn.classList.remove('bg-white', 'text-slate-700', 'border', 'border-slate-200');
+                activeBtn.classList.add('bg-herb-800', 'text-white', 'shadow-sm');
+            }
+            filterHealers();
+        }
+
+        function selectHealer(id) {
+            openHealerDetail(id);
+        }
+
+        function openHealerDetail(id) {
+            const h = healersData.find(item => item.id === id);
+            if(!h) return;
+
+            const modalContent = document.getElementById('modalContent');
+            modalContent.innerHTML = `
+                <div class="flex items-center gap-4">
+                    <img src="${avatarSrc(h)}" alt="" class="w-20 h-20 rounded-2xl object-cover border-2 border-herb-200">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-xl font-bold text-slate-800">${h.name}</h3>
+                            ${h.isOutstanding ? '<span class="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-bold">ตราหมอไทยดีเด่น</span>' : ''}
+                        </div>
+                        <p class="text-xs text-herb-700 font-semibold mt-1">${h.type} &bull; ${h.area}</p>
+                        <p class="text-xs text-slate-400 mt-0.5">สถานะรับรอง: <span class="text-emerald-600 font-bold">${h.status}</span> (${h.cert})</p>
+                    </div>
+                </div>
+
+                <div class="space-y-3 bg-herb-50/50 p-4 rounded-2xl border border-herb-100">
+                    <h4 class="font-bold text-slate-800 text-sm"><i class="fa-solid fa-user-clock text-herb-600 mr-2"></i> ประวัติและความเชี่ยวชาญ</h4>
+                    <p class="text-xs text-slate-600 leading-relaxed">${h.experience}</p>
+                </div>
+
+                <div class="space-y-3">
+                    <h4 class="font-bold text-slate-800 text-sm"><i class="fa-solid fa-mortar-pestle text-herb-600 mr-2"></i> ตำรับยาที่เกี่ยวข้อง</h4>
+                    <div class="flex flex-wrap gap-2">
+                        ${h.recipes.map(r => `<span class="bg-white px-3 py-1.5 rounded-xl text-xs font-semibold text-herb-800 border border-herb-200 shadow-sm">${r}</span>`).join('')}
+                    </div>
+                </div>
+
+                <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                    <div>
+                        <h4 class="font-bold text-slate-800 text-xs">ช่องทางประสานงานผ่านเครือข่ายสุขภาพชุมชน</h4>
+                        <p class="text-xs text-slate-500 mt-0.5">สังกัด/ประสานงานร่วมกับ <b class="text-herb-800">${h.hospital}</b></p>
+                    </div>
+                    <button onclick="alertContact('${h.hospital}')" class="bg-herb-700 hover:bg-herb-800 text-white px-4 py-2 rounded-xl text-xs font-semibold transition">
+                        <i class="fa-solid fa-phone mr-1"></i> ติดต่อประสานงาน
+                    </button>
+                </div>
+            `;
+            document.getElementById('healerModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('healerModal').classList.add('hidden');
+        }
+
+        function renderRecipes(list) {
+            const container = document.getElementById('recipesContainer');
+            container.innerHTML = list.map(r => `
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-herb-100 space-y-4 flex flex-col justify-between">
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h4 class="font-bold text-slate-800 text-base">${r.name}</h4>
+                            <span class="text-[10px] bg-emerald-50 text-herb-800 px-2.5 py-1 rounded-full font-bold border border-herb-200">${r.evidenceLevel}</span>
+                        </div>
+                        <p class="text-xs text-slate-600"><b>สมุนไพรองค์ประกอบ:</b> ${r.herb}</p>
+                        <p class="text-xs text-slate-600"><b>สรรพคุณ:</b> ${r.indication}</p>
+                        <div class="p-3 rounded-2xl bg-herb-50/50 border border-herb-100 text-xs space-y-1">
+                            <p class="font-semibold text-herb-900"><i class="fa-solid fa-flask text-herb-600 mr-1"></i> สรุปหลักฐานงานวิจัย:</p>
+                            <p class="text-slate-600">${r.summary}</p>
+                        </div>
+                        <div class="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-xl">
+                            <b>ข้อจำกัดทางวิชาการ:</b> ${r.limitations}
+                        </div>
+                    </div>
+                    <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+                        <span>${r.doi}</span>
+                        <button onclick="alert('คัดลอกลิงก์อ้างอิงสำเร็จ')" class="text-herb-700 font-semibold hover:underline">
+                            <i class="fa-solid fa-copy mr-1"></i> คัดลอกอ้างอิง
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterRecipes() {
+            const query = document.getElementById('recipeSearchInput').value.toLowerCase();
+            const filtered = recipesData.filter(r => r.name.toLowerCase().includes(query) || r.herb.toLowerCase().includes(query) || r.indication.toLowerCase().includes(query));
+            renderRecipes(filtered);
+        }
+
+        function renderResearcherTable() {
+            const tbody = document.getElementById('researcherTableBody');
+            tbody.innerHTML = recipesData.map(r => `
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="p-3.5 font-bold text-slate-800">${r.name}</td>
+                    <td class="p-3.5 text-slate-600">${r.indication}</td>
+                    <td class="p-3.5"><span class="bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full text-xs font-semibold">${r.evidenceLevel}</span></td>
+                    <td class="p-3.5 text-herb-700 font-mono text-xs">${r.doi}</td>
+                </tr>
+            `).join('');
+        }
+
+        function exportData(format) {
+            alert(`ระบบได้ทำการส่งออกข้อมูลตำรับยาในรูปแบบ ${format.toUpperCase()} เรียบร้อยแล้ว สามารถนำไปใช้อ้างอิงในงานวิจัยได้ทันที`);
+        }
+
+        const diseaseSearchFields = [
+            { label: 'ชื่อโรค', value: 'อัมพฤกษ์–อัมพาต โรคหลอดเลือดสมอง stroke' },
+            ...['ยาหอมทิพโอสถ', 'ยาหอมเทพจิตร', 'ยาหอมนวโกฐ', 'ยาสหัศธารา', 'ไพล', 'ตะไคร้', 'ขมิ้น', 'ผิวมะกรูด'].map(name => ({
+                label: `กล่าวถึง${name}ในบทความ (ไม่ใช่คำแนะนำให้ใช้รักษาเอง)`, value: name
+            }))
+        ];
+
+        function normalizeLibrarySearch(value) {
+            return value.normalize('NFC').trim().toLowerCase().replace(/[–—]/g, '-').replace(/\s+/g, ' ');
+        }
+
+        function matchLibraryFields(fields, terms) {
+            const matches = fields.filter(field => terms.some(term => normalizeLibrarySearch(field.value).includes(term)));
+            return {
+                found: terms.every(term => matches.some(field => normalizeLibrarySearch(field.value).includes(term))),
+                reason: matches.map(field => field.label).join(' · ')
+            };
+        }
+
+        const LIBRARY_PAGE_SIZE = 12;
+        let submittedLibraryQuery = '';
+        const libraryPages = { disease: 1, recipe: 1 };
+
+        function resetLibraryPages() {
+            libraryPages.disease = 1;
+            libraryPages.recipe = 1;
+        }
+
+        function updateLibraryDraft() {
+            const draft = normalizeLibrarySearch(document.getElementById('librarySearchInput').value);
+            if (!draft) {
+                submittedLibraryQuery = '';
+                resetLibraryPages();
+                filterLibrary();
+            }
+            document.getElementById('libraryDraftHint').classList.toggle('hidden',
+                !submittedLibraryQuery || draft === submittedLibraryQuery);
+            document.getElementById('libraryClearButton').classList.toggle('hidden',
+                !draft && !document.getElementById('libRegion').value);
+        }
+
+        function submitLibrarySearch(event) {
+            event.preventDefault();
+            submittedLibraryQuery = normalizeLibrarySearch(document.getElementById('librarySearchInput').value);
+            resetLibraryPages();
+            closeDiseaseDetail(false);
+            filterLibrary();
+            updateLibraryDraft();
+        }
+
+        function changeLibraryRegion() {
+            resetLibraryPages();
+            filterLibrary();
+            updateLibraryDraft();
+        }
+
+        function clearLibrarySearch() {
+            const input = document.getElementById('librarySearchInput');
+            input.value = '';
+            document.getElementById('libRegion').value = '';
+            updateLibraryDraft();
+            input.focus();
+        }
+
+        function openDiseaseDetail() {
+            const detail = document.getElementById('diseaseDetail');
+            detail.classList.remove('hidden');
+            document.getElementById('openStrokeDetail').setAttribute('aria-expanded', 'true');
+            document.getElementById('diseaseDetailHeading').focus({ preventScroll: true });
+            detail.scrollIntoView({ block: 'start' });
+        }
+
+        function closeDiseaseDetail(restoreFocus = true) {
+            document.getElementById('diseaseDetail').classList.add('hidden');
+            const button = document.getElementById('openStrokeDetail');
+            button.setAttribute('aria-expanded', 'false');
+            if (restoreFocus) button.focus();
+        }
+
+        function paginateLibraryCards(kind, cards, matches) {
+            const totalPages = Math.max(1, Math.ceil(matches.length / LIBRARY_PAGE_SIZE));
+            libraryPages[kind] = Math.max(1, Math.min(libraryPages[kind], totalPages));
+            const start = (libraryPages[kind] - 1) * LIBRARY_PAGE_SIZE;
+            const visible = new Set(matches.slice(start, start + LIBRARY_PAGE_SIZE));
+            cards.forEach(card => card.classList.toggle('hidden', !visible.has(card)));
+            const pager = document.getElementById(kind + 'Pagination');
+            pager.classList.toggle('hidden', matches.length <= LIBRARY_PAGE_SIZE);
+            pager.querySelector('[data-page-step="-1"]').disabled = libraryPages[kind] === 1;
+            pager.querySelector('[data-page-step="1"]').disabled = libraryPages[kind] === totalPages;
+            document.getElementById(kind + 'PageRange').textContent = matches.length
+                ? `แสดง ${start + 1}–${Math.min(start + LIBRARY_PAGE_SIZE, matches.length)} จาก ${matches.length} รายการ`
+                : '';
+        }
+
+        function changeLibraryPage(kind, step) {
+            libraryPages[kind] += step;
+            filterLibrary();
+            const heading = document.getElementById(kind === 'disease' ? 'diseaseResultsHeading' : 'recipeResultsHeading');
+            heading.focus({ preventScroll: true });
+            heading.scrollIntoView({ block: 'start' });
+        }
+
+        function renderLibraryRecommendations() {
+            const cards = Array.from(document.querySelectorAll('#libraryGrid .lib-card')).slice(0, 3);
+            document.getElementById('libraryRecommendedGrid').replaceChildren(...cards.map(card => {
+                const recommendation = card.cloneNode(true);
+                recommendation.classList.remove('hidden');
+                recommendation.querySelector('.library-match').classList.add('hidden');
+                return recommendation;
+            }));
+        }
+
+        function filterLibrary() {
+            const query = submittedLibraryQuery;
+            const hasQuery = Boolean(query);
+            document.getElementById('libraryResults').classList.toggle('hidden', !hasQuery);
+            document.getElementById('libraryInitial').classList.toggle('hidden', hasQuery);
+            if (!hasQuery) {
+                document.querySelectorAll('#diseaseGrid .disease-card, #libraryGrid .lib-card')
+                    .forEach(card => card.classList.add('hidden'));
+                document.getElementById('librarySearchStatus').textContent = '';
+                closeDiseaseDetail(false);
+                return;
+            }
+            const terms = query.split(' ');
+            const region = document.getElementById('libRegion').value;
+            const diseaseMatch = matchLibraryFields(diseaseSearchFields, terms);
+            document.getElementById('diseaseEmpty').classList.toggle('hidden', diseaseMatch.found);
+            const diseaseReason = document.getElementById('diseaseMatchReason');
+            diseaseReason.textContent = `พบจาก: ${diseaseMatch.reason}`;
+            diseaseReason.classList.toggle('hidden', !diseaseMatch.found);
+            const diseaseCards = Array.from(document.querySelectorAll('#diseaseGrid .disease-card'));
+            const matchingDiseases = diseaseMatch.found ? diseaseCards : [];
+            paginateLibraryCards('disease', diseaseCards, matchingDiseases);
+            if (document.getElementById('strokeDiseaseCard').classList.contains('hidden')) closeDiseaseDetail(false);
+
+            const recipeCards = Array.from(document.querySelectorAll('#libraryGrid .lib-card'));
+            const matchingRecipes = recipeCards.filter(card => {
+                const fields = [
+                    { label: 'ชื่อตำรับยา', value: card.querySelector('h4').textContent },
+                    { label: 'สมุนไพร', value: card.dataset.herbs },
+                    { label: 'อาการ/สรรพคุณตามข้อมูลตำรับ', value: card.dataset.symptoms }
+                ];
+                const match = matchLibraryFields(fields, terms);
+                const show = match.found && (!region || card.dataset.region === region);
+                const reason = card.querySelector('.library-match');
+                reason.textContent = `พบจาก: ${match.reason}`;
+                reason.classList.toggle('hidden', !show);
+                return show;
+            });
+            paginateLibraryCards('recipe', recipeCards, matchingRecipes);
+            const recipeCount = matchingRecipes.length;
+            document.getElementById('libraryEmpty').classList.toggle('hidden', recipeCount > 0);
+            document.getElementById('libraryEmpty').textContent = region
+                ? `ไม่พบตำรับยาที่ตรงกับคำค้นในภาค${region}`
+                : 'ไม่พบตำรับยาที่ตรงกับคำค้นในข้อมูลที่มี';
+            const diseaseCount = matchingDiseases.length;
+            document.getElementById('diseaseResultCount').textContent = `${diseaseCount} รายการ`;
+            document.getElementById('recipeResultCount').textContent = `${recipeCount} รายการ`;
+            document.getElementById('libraryAllEmpty').classList.toggle('hidden', diseaseCount + recipeCount > 0);
+            document.getElementById('librarySearchStatus').textContent =
+                `“${query}” · พบ ${diseaseCount + recipeCount} รายการ${region ? ' · ตำรับยา: ภาค' + region : ''}`;
+        }
+
+        function switchTab(tab) {
+            ['home', 'library', 'research', 'community', 'excellence', 'staff', 'admin'].forEach(id => {
+                document.getElementById('view-' + id).classList.toggle('hidden', id !== tab);
+            });
+            if (tab === 'admin') { switchAdminSection('overview'); renderAdmin(); }
+            if (tab === 'home' && healerMap) setTimeout(() => healerMap.invalidateSize(), 0);
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        const roleConfig = {
+            public: { label: 'ประชาชนทั่วไป', icon: 'fa-users', tab: 'home' },
+            staff: { label: 'เจ้าหน้าที่ / นักวิจัย', icon: 'fa-user-doctor', tab: 'staff' },
+            admin: { label: 'แอดมิน', icon: 'fa-user-gear', tab: 'admin' }
+        };
+
+        function setRole(role) {
+            const cfg = roleConfig[role];
+            if (!cfg) return;
+            document.getElementById('current-role-label').innerText = cfg.label;
+            document.getElementById('current-role-icon').className = 'fa-solid text-sm ' + cfg.icon;
+            document.querySelectorAll('[data-role-check]').forEach(el => {
+                el.classList.toggle('hidden', el.dataset.roleCheck !== role);
+            });
+            switchTab(cfg.tab);
+            toggleRoleMenu();
+        }
+
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        const VERIFIED_STATUS = "ได้รับการรับรองแล้ว";
+
+        function switchAdminSection(section) {
+            ['overview', 'register'].forEach(id => {
+                document.getElementById('admin-section-' + id).classList.toggle('hidden', id !== section);
+                const btn = document.getElementById('admin-nav-' + id);
+                const active = id === section;
+                btn.classList.toggle('bg-herb-100', active);
+                btn.classList.toggle('text-herb-800', active);
+                btn.classList.toggle('font-semibold', active);
+                btn.classList.toggle('text-slate-600', !active);
+                btn.classList.toggle('font-medium', !active);
+            });
+        }
+
+        function renderAdmin() {
+            const pending = healersData.filter(h => h.status !== VERIFIED_STATUS).length;
+            const badge = document.getElementById('adminPendingBadge');
+            badge.innerText = pending;
+            badge.classList.toggle('hidden', pending === 0);
+            const total = healersData.length;
+            const verified = healersData.filter(h => h.status === VERIFIED_STATUS).length;
+            const outstanding = healersData.filter(h => h.isOutstanding).length;
+            const stats = [
+                { label: 'หมอพื้นบ้านทั้งหมด', value: total, icon: 'fa-user-doctor', color: 'bg-herb-100 text-herb-700' },
+                { label: 'ได้รับการรับรองแล้ว', value: verified, icon: 'fa-circle-check', color: 'bg-emerald-100 text-emerald-700' },
+                { label: 'รอตรวจสอบ', value: total - verified, icon: 'fa-hourglass-half', color: 'bg-amber-100 text-amber-700' },
+                { label: 'หมอไทยดีเด่น', value: outstanding, icon: 'fa-award', color: 'bg-yellow-100 text-gold-600' }
+            ];
+            document.getElementById('adminStats').innerHTML = stats.map(s => `
+                <div class="bg-white p-5 rounded-3xl shadow-sm border border-herb-100 flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-2xl ${s.color} flex items-center justify-center text-xl"><i class="fa-solid ${s.icon}"></i></div>
+                    <div>
+                        <div class="text-2xl font-bold text-slate-800">${s.value}</div>
+                        <div class="text-xs text-slate-500">${s.label}</div>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('adminTableBody').innerHTML = healersData.map(h => {
+                const isVerified = h.status === VERIFIED_STATUS;
+                return `
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="p-3.5 font-bold text-slate-800">${escapeHtml(h.name)}${h.isOutstanding ? ' <i class="fa-solid fa-award text-gold-500" title="หมอไทยดีเด่น"></i>' : ''}</td>
+                    <td class="p-3.5 text-slate-600 text-xs">${escapeHtml(h.type)}<br>${escapeHtml(h.area)}</td>
+                    <td class="p-3.5 font-mono text-xs text-herb-700">${escapeHtml(h.cert)}</td>
+                    <td class="p-3.5"><span class="${isVerified ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'} px-2.5 py-1 rounded-full text-xs font-semibold">${escapeHtml(h.status)}</span></td>
+                    <td class="p-3.5 text-right whitespace-nowrap">
+                        ${isVerified
+                            ? `<button onclick="toggleOutstanding(${h.id})" class="text-xs px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700">${h.isOutstanding ? 'ยกเลิกตราดีเด่น' : 'มอบตราดีเด่น'}</button>
+                               <button onclick="setHealerStatus(${h.id}, false)" class="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100">ระงับ</button>`
+                            : `<button onclick="setHealerStatus(${h.id}, true)" class="text-xs px-3 py-1.5 rounded-lg bg-herb-700 hover:bg-herb-800 text-white">อนุมัติ</button>`}
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function setHealerStatus(id, approve) {
+            const h = healersData.find(x => x.id === id);
+            if (!h) return;
+            h.status = approve ? VERIFIED_STATUS : "รอตรวจสอบ (Verification)";
+            if (!approve) h.isOutstanding = false;
+            renderAdmin();
+            filterHealers();
+        }
+
+        function toggleOutstanding(id) {
+            const h = healersData.find(x => x.id === id);
+            if (!h) return;
+            h.isOutstanding = !h.isOutstanding;
+            renderAdmin();
+            filterHealers();
+        }
+
+        function toggleRoleMenu() {
+            const menu = document.getElementById('role-menu');
+            menu.classList.toggle('hidden');
+        }
+
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        }
+
+        window.matchMedia('(min-width: 1024px)').addEventListener('change', event => {
+            if (event.matches) document.getElementById('mobile-menu').classList.add('hidden');
+        });
+
+        function handleRegistrationSubmit(e) {
+            e.preventDefault();
+            const name = document.getElementById('regName').value;
+            const type = document.getElementById('regType').value;
+            const area = document.getElementById('regArea').value;
+            const cert = document.getElementById('regCert').value;
+            const desc = document.getElementById('regDesc').value;
+
+            healersData.unshift({
+                id: healersData.length + 1,
+                name: name,
+                type: type,
+                area: area,
+                cert: cert,
+                status: "รอตรวจสอบ (Verification)",
+                isOutstanding: false,
+                experience: desc,
+                recipes: ["ตำรับยาประจำตัว"],
+                hospital: "รพ.สต. ในพื้นที่",
+                phone: "080-000-0000"
+            });
+
+            alert('ส่งข้อมูลเพื่อรอตรวจสอบแล้ว');
+            e.target.reset();
+            switchTab('admin');
+            filterHealers();
+        }
+
+        function alertContact(hospitalName) {
+            alert(`กำลังเชื่อมต่อสายด่วนประสานงานกับ "${hospitalName}" เพื่อปรึกษาและส่งต่อข้อมูลกับหมอพื้นบ้านอย่างปลอดภัย`);
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            renderLibraryRecommendations();
+            filterLibrary();
+            initMap();
+            renderHealers(healersData);
+            renderRecipes(recipesData);
+            renderResearcherTable();
+        };
+    </script>
+</body>
+</html>
